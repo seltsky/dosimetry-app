@@ -24,29 +24,47 @@
 
     <!-- Tab: Calculator -->
     <section id="tab-calc" class="tab-content active">
+
+      <!-- Microsphere Toggle -->
+      <div class="micro-toggle">
+        <button class="micro-btn active" data-micro="resin">Resin (SIR-Spheres)</button>
+        <button class="micro-btn" data-micro="glass">Glass (TheraSphere)</button>
+      </div>
+      <input type="hidden" id="microsphere" value="resin">
+
+      <!-- Scenario Tabs -->
+      <div class="scenario-tabs">
+        <button class="scenario-tab active" data-scenario="segmentectomy">RS</button>
+        <button class="scenario-tab" data-scenario="lobectomy">Lobectomy</button>
+        <button class="scenario-tab" data-scenario="hcc">HCC</button>
+        <button class="scenario-tab" data-scenario="crclm">CRCLM</button>
+        <button class="scenario-tab" data-scenario="bilobar">Bilobar</button>
+        <button class="scenario-tab" data-scenario="pvt">PVT</button>
+      </div>
+
+      <!-- Dose Guide (auto-updates by micro + scenario) -->
+      <div class="card" id="doseGuide">
+        <div id="doseGuideContent" class="dose-guide"></div>
+      </div>
+
       <div class="card">
         <h3>기본 정보</h3>
-        <div class="form-row">
-          <label>Microsphere</label>
-          <select id="microsphere">
-            <option value="resin">Resin (SIR-Spheres)</option>
-            <option value="glass">Glass (TheraSphere)</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label>Child-Pugh</label>
-          <select id="childPugh">
-            <option value="A">A</option>
-            <option value="B">B</option>
-            <option value="C">C</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <label>치료 의도</label>
-          <select id="intent">
-            <option value="curative">Curative (RS/RL)</option>
-            <option value="palliative">Palliative</option>
-          </select>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Child-Pugh</label>
+            <select id="childPugh">
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>치료 의도</label>
+            <select id="intent">
+              <option value="curative">Curative</option>
+              <option value="palliative">Palliative</option>
+            </select>
+          </div>
         </div>
         <div class="form-row">
           <label>종양 위치</label>
@@ -88,11 +106,6 @@
             <input type="number" id="lungMass" value="1000" step="1">
           </div>
         </div>
-      </div>
-
-      <div class="card" id="doseGuide">
-        <h3>시나리오별 권장 선량</h3>
-        <div id="doseGuideContent" class="dose-guide"></div>
       </div>
 
       <div class="card">
@@ -145,7 +158,6 @@
     </section>
   </div>
 
-  <script src="references.json" id="refsData"></script>
   <script src="dosimetry.js"></script>
 </body>
 </html>
