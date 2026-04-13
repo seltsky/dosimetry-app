@@ -35,32 +35,20 @@ function calcPartition(input) {
   const { perfusedVol, tumorVol, tnRatio, lsf, lungMass, targetTumorDose } = input;
   const normalVol = perfusedVol - tumorVol;
   const normalDose = targetTumorDose / tnRatio;
-
-  // Perfused tissue dose (weighted average)
   const perfusedDose = (tumorVol * targetTumorDose + normalVol * normalDose) / perfusedVol;
-
-  // Required activity (Partition model)
-  // A = D_perfused * M_perfused / (CONST * (1 - LSF/100))
-  const perfusedMass = perfusedVol; // assuming 1g/mL
+  const perfusedMass = perfusedVol;
   const activity = (perfusedDose * perfusedMass) / (RESIN_CONST * (1 - lsf / 100));
-
-  // Lung dose
   const lungDose = (activity * RESIN_CONST * (lsf / 100)) / lungMass;
 
-  // Whole liver NTAD (if whole liver vol provided)
   let wlNtad = null;
   if (input.wholeVol && input.wholeVol > 0) {
     const totalNormalLiver = input.wholeVol - tumorVol;
     wlNtad = (normalVol * normalDose) / totalNormalLiver;
   }
 
-  // Perfused fraction
   const perfusedFraction = input.wholeVol ? (perfusedVol / input.wholeVol * 100) : null;
-
-  // Liver Limiting dose (NTAD = 70 Gy for resin)
   const ntadLimit = input.microsphere === 'resin' ? 70 : 120;
   const liverLimitTumorDose = ntadLimit * tnRatio;
-  const liverLimitActivity = ((ntadLimit * normalVol + liverLimitTumorDose * tumorVol / tnRatio * tnRatio) / perfusedVol * perfusedMass) / (RESIN_CONST * (1 - lsf / 100));
 
   return {
     activity: Math.round(activity * 100) / 100,
@@ -72,6 +60,41 @@ function calcPartition(input) {
     perfusedFraction: perfusedFraction !== null ? Math.round(perfusedFraction * 10) / 10 : null,
     normalVol,
     liverLimitTumorDose: Math.round(liverLimitTumorDose),
+  };
+}
+
+// ====== MIRD (Single Compartment) Calculation ======
+function calcMIRD(input) {
+  const { perfusedVol, tumorVol, tnRatio, lsf, lungMass, targetTumorDose } = input;
+  const normalVol = perfusedVol - tumorVol;
+  const perfusedMass = perfusedVol;
+
+  // MIRD: treat perfused volume as single compartment
+  // Set perfused dose = target tumor dose (no T/N differentiation for activity calc)
+  // This gives a HIGHER (more conservative) activity than Partition
+  const mirdPerfusedDose = targetTumorDose;
+  const mirdActivity = (mirdPerfusedDose * perfusedMass) / (RESIN_CONST * (1 - lsf / 100));
+
+  // Back-calculate actual tumor/normal doses with T/N ratio applied
+  const actualPerfusedDose = (mirdActivity * RESIN_CONST * (1 - lsf / 100)) / perfusedMass;
+  const actualTumorDose = actualPerfusedDose * tnRatio * perfusedVol / (tnRatio * tumorVol + normalVol);
+  const actualNormalDose = actualTumorDose / tnRatio;
+
+  const lungDose = (mirdActivity * RESIN_CONST * (lsf / 100)) / lungMass;
+
+  let wlNtad = null;
+  if (input.wholeVol && input.wholeVol > 0) {
+    const totalNormalLiver = input.wholeVol - tumorVol;
+    wlNtad = (normalVol * actualNormalDose) / totalNormalLiver;
+  }
+
+  return {
+    activity: Math.round(mirdActivity * 100) / 100,
+    perfusedDose: Math.round(actualPerfusedDose * 100) / 100,
+    tumorDose: Math.round(actualTumorDose * 100) / 100,
+    normalDose: Math.round(actualNormalDose * 100) / 100,
+    lungDose: Math.round(lungDose * 100) / 100,
+    wlNtad: wlNtad !== null ? Math.round(wlNtad * 100) / 100 : null,
   };
 }
 
@@ -191,13 +214,20 @@ function generateReport(input, result, safety) {
   lines.push(`T/N: ${input.tnRatio} | LSF: ${input.lsf}%`);
   if (input.wholeVol) lines.push(`Whole liver: ${input.wholeVol} mL | Perfused fraction: ${result.perfusedFraction}%`);
   lines.push('');
-  lines.push(`[Partition Model 결과]`);
+  lines.push(`[Partition Model]`);
   lines.push(`Activity: ${result.activity} GBq`);
-  lines.push(`Tumor AD: ${result.tumorDose} Gy`);
-  lines.push(`Perfused NTAD: ${result.normalDose} Gy`);
-  lines.push(`Perfused tissue AD: ${result.perfusedDose} Gy`);
+  lines.push(`Tumor AD: ${result.tumorDose} Gy | NTAD: ${result.normalDose} Gy`);
+  lines.push(`Perfused AD: ${result.perfusedDose} Gy`);
   if (result.wlNtad !== null) lines.push(`WL NTAD: ${result.wlNtad} Gy`);
   lines.push(`Lung AD: ${result.lungDose} Gy`);
+  lines.push('');
+  lines.push(`[MIRD (Simplicity)]`);
+  const mirdData = calcMIRD(input);
+  lines.push(`Activity: ${mirdData.activity} GBq`);
+  lines.push(`Tumor AD: ${mirdData.tumorDose} Gy | NTAD: ${mirdData.normalDose} Gy`);
+  lines.push(`Perfused AD: ${mirdData.perfusedDose} Gy`);
+  if (mirdData.wlNtad !== null) lines.push(`WL NTAD: ${mirdData.wlNtad} Gy`);
+  lines.push(`Lung AD: ${mirdData.lungDose} Gy`);
   lines.push('');
   lines.push(`[안전성 평가]`);
   safety.items.forEach(s => lines.push(`${s.icon} ${s.text}`));
@@ -205,21 +235,41 @@ function generateReport(input, result, safety) {
 }
 
 // ====== Render Results ======
-function renderResults(input, result, safety) {
+function renderResults(input, result, mird, safety) {
   const container = document.getElementById('resultContainer');
   const cases = findSimilarCases(input, result);
 
   let html = `
     <div class="card">
       <span class="scenario-badge">${safety.scenario}</span>
-      <div class="result-section">
-        <h3>Partition Model 계산 결과</h3>
-        <div class="result-row"><span class="result-label">Required Activity</span><span class="result-value">${result.activity} GBq</span></div>
-        <div class="result-row"><span class="result-label">Tumor Absorbed Dose</span><span class="result-value">${result.tumorDose} Gy</span></div>
-        <div class="result-row"><span class="result-label">Perfused NTAD</span><span class="result-value ${result.normalDose<=40?'safe':result.normalDose<=52?'warn':'danger'}">${result.normalDose} Gy</span></div>
-        <div class="result-row"><span class="result-label">Perfused Tissue AD</span><span class="result-value">${result.perfusedDose} Gy</span></div>
-        ${result.wlNtad!==null ? `<div class="result-row"><span class="result-label">Whole Liver NTAD</span><span class="result-value ${result.wlNtad<=40?'safe':result.wlNtad<=52?'warn':'danger'}">${result.wlNtad} Gy</span></div>` : ''}
-        <div class="result-row"><span class="result-label">Lung Absorbed Dose</span><span class="result-value ${result.lungDose<=15?'safe':result.lungDose<=30?'warn':'danger'}">${result.lungDose} Gy</span></div>
+
+      <div class="model-compare">
+        <div class="model-col">
+          <div class="model-header partition-header">Partition Model</div>
+          <div class="model-value-big">${result.activity} <span class="model-unit">GBq</span></div>
+          <div class="model-rows">
+            <div class="result-row"><span class="result-label">Tumor AD</span><span class="result-value">${result.tumorDose} Gy</span></div>
+            <div class="result-row"><span class="result-label">NTAD</span><span class="result-value ${result.normalDose<=40?'safe':result.normalDose<=52?'warn':'danger'}">${result.normalDose} Gy</span></div>
+            <div class="result-row"><span class="result-label">Perfused AD</span><span class="result-value">${result.perfusedDose} Gy</span></div>
+            ${result.wlNtad!==null ? `<div class="result-row"><span class="result-label">WL NTAD</span><span class="result-value ${result.wlNtad<=40?'safe':result.wlNtad<=52?'warn':'danger'}">${result.wlNtad} Gy</span></div>` : ''}
+            <div class="result-row"><span class="result-label">Lung AD</span><span class="result-value ${result.lungDose<=15?'safe':result.lungDose<=30?'warn':'danger'}">${result.lungDose} Gy</span></div>
+          </div>
+        </div>
+        <div class="model-col">
+          <div class="model-header mird-header">MIRD (Simplicity)</div>
+          <div class="model-value-big">${mird.activity} <span class="model-unit">GBq</span></div>
+          <div class="model-rows">
+            <div class="result-row"><span class="result-label">Tumor AD</span><span class="result-value">${mird.tumorDose} Gy</span></div>
+            <div class="result-row"><span class="result-label">NTAD</span><span class="result-value ${mird.normalDose<=40?'safe':mird.normalDose<=52?'warn':'danger'}">${mird.normalDose} Gy</span></div>
+            <div class="result-row"><span class="result-label">Perfused AD</span><span class="result-value">${mird.perfusedDose} Gy</span></div>
+            ${mird.wlNtad!==null ? `<div class="result-row"><span class="result-label">WL NTAD</span><span class="result-value ${mird.wlNtad<=40?'safe':mird.wlNtad<=52?'warn':'danger'}">${mird.wlNtad} Gy</span></div>` : ''}
+            <div class="result-row"><span class="result-label">Lung AD</span><span class="result-value ${mird.lungDose<=15?'safe':mird.lungDose<=30?'warn':'danger'}">${mird.lungDose} Gy</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="model-note">※ Partition이 T/N ratio 반영하여 더 정확. MIRD는 보수적(higher activity). Simplicity 결과와 비교해주세요.</div>
+
+      <div class="result-section" style="margin-top:12px">
         ${result.perfusedFraction!==null ? `<div class="result-row"><span class="result-label">Perfused Fraction</span><span class="result-value">${result.perfusedFraction}%</span></div>` : ''}
         <div class="result-row"><span class="result-label">Liver Limiting Tumor Dose</span><span class="result-value">${result.liverLimitTumorDose} Gy</span></div>
       </div>
@@ -524,8 +574,9 @@ function init() {
     }
 
     const result = calcPartition(input);
+    const mird = calcMIRD(input);
     const safety = evaluateSafety(input, result);
-    renderResults(input, result, safety);
+    renderResults(input, result, mird, safety);
 
     // Switch to result tab
     document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
