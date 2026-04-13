@@ -78,6 +78,12 @@ header h1 { font-size: 22px; color: var(--accent); }
 }
 .quick-dose.active { background:var(--accent); color:var(--bg); border-color:var(--accent); }
 
+.dose-guide { font-size:12px; }
+.dose-guide-row { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(30,48,80,0.3); }
+.dose-guide-row:last-child { border-bottom:none; }
+.dose-guide-scenario { color:var(--dim); }
+.dose-guide-dose { color:var(--accent); font-weight:700; }
+
 .calc-btn {
   width:100%; padding:14px; background:linear-gradient(135deg, var(--accent), var(--accent2));
   border:none; border-radius:12px; color:var(--bg);

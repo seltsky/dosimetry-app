@@ -364,6 +364,43 @@ function init() {
     });
   });
 
+  // Dose guide update
+  function updateDoseGuide() {
+    const micro = document.getElementById('microsphere').value;
+    const el = document.getElementById('doseGuideContent');
+    if (!el) return;
+
+    const guides = micro === 'resin' ? [
+      ['Segmentectomy (curative)', '≥300 Gy (optimal), ≥250 Gy (min)', 'Hermann 2024'],
+      ['Lobectomy (partition)', '≥250 Gy', 'NCT04172714'],
+      ['Lobectomy (MIRD)', '≥100 Gy', 'SARAH'],
+      ['HCC OR', '≥176 Gy', 'Vouche 2023'],
+      ['HCC CR', '≥247 Gy', 'Vouche 2023'],
+      ['CRCLM', '≥100~120 Gy', 'SARAH/Doyle'],
+      ['Normal tissue (safe)', '<40 Gy', 'Strigari 2010'],
+      ['Lung (Korean)', '<15 Gy/session', 'Korean guideline'],
+    ] : [
+      ['Segmentectomy (perfused)', '≥400 Gy', 'LEGACY/2025 EJNMMI'],
+      ['Lobectomy (tumor)', '>205 Gy, ideally >250 Gy', 'DOSISPHERE-01'],
+      ['HCC OR', '≥290 Gy', 'Vouche 2023'],
+      ['HCC CR', '≥481 Gy', 'Vouche 2023'],
+      ['iCCA', '≥205 Gy', '2025 Expert'],
+      ['mCRC/mNET', '150-200 Gy', '2025 Expert'],
+      ['NTAD Lobectomy', '<120 Gy', '2022 EJNMMI'],
+      ['Lung (Korean M/F)', '<25/<20 Gy', 'Korean guideline'],
+    ];
+
+    el.innerHTML = guides.map(g => `
+      <div class="dose-guide-row">
+        <span class="dose-guide-scenario">${g[0]}</span>
+        <span class="dose-guide-dose">${g[1]}</span>
+      </div>
+    `).join('');
+  }
+
+  document.getElementById('microsphere').addEventListener('change', updateDoseGuide);
+  updateDoseGuide();
+
   // Calculate
   document.getElementById('calcBtn').addEventListener('click', () => {
     const input = {
