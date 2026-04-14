@@ -269,29 +269,88 @@ function renderGuide(containerId, micro, scenario) {
   el.innerHTML = g.map(r => `<div class="dose-guide-row"><span class="dose-guide-scenario">${r[0]}</span><span class="dose-guide-dose">${r[1]}</span></div><div style="font-size:10px;color:var(--dim);padding:0 0 3px 8px">${r[2]}</div>`).join('');
 }
 
-// ====== Safety Evaluation ======
-function evalSafety(micro, tumorDose, ntad, wlNtad, lungDose, lsf) {
-  const items = [];
-  if (micro === 'resin') {
-    items.push({ icon: tumorDose>=300?'✅':tumorDose>=250?'⚠️':tumorDose>=176?'⚠️':'❌', text: `Tumor ${tumorDose?.toFixed(1)||'—'} Gy (RS≥300, OR≥176)`, ref:'Hermann 2024 / Vouche 2023' });
-    if(ntad!=null) items.push({ icon: ntad<=40?'✅':ntad<=52?'⚠️':'❌', text: `NTAD ${ntad.toFixed(1)} Gy (safe<40, TD50 52)`, ref:'Strigari 2010' });
-    if(wlNtad!=null) items.push({ icon: wlNtad<=40?'✅':wlNtad<=52?'⚠️':'❌', text: `WL NTAD ${wlNtad.toFixed(1)} Gy`, ref:'Strigari 2010' });
-    if(lungDose!=null) items.push({ icon: lungDose<=15?'✅':lungDose<=30?'⚠️':'❌', text: `Lung ${lungDose.toFixed(1)} Gy (Korean<15)`, ref:'KLCA' });
-  } else {
-    items.push({ icon: tumorDose>=400?'✅':tumorDose>=250?'⚠️':tumorDose>=205?'⚠️':'❌', text: `Tumor ${tumorDose?.toFixed(1)||'—'} Gy (RS≥400, Lob≥205)`, ref:'LEGACY / DOSISPHERE-01' });
-    if(ntad!=null) items.push({ icon: ntad<=75?'✅':ntad<=120?'⚠️':'❌', text: `NTAD ${ntad.toFixed(1)} Gy (safe<75, Lob<120)`, ref:'2025 EJNMMI / 2022 Consensus' });
-    if(wlNtad!=null) items.push({ icon: wlNtad<=52?'✅':'⚠️', text: `WL NTAD ${wlNtad.toFixed(1)} Gy`, ref:'Strigari 2010' });
-    if(lungDose!=null) items.push({ icon: lungDose<=25?'✅':lungDose<=30?'⚠️':'❌', text: `Lung ${lungDose.toFixed(1)} Gy (Korean M<25)`, ref:'KLCA' });
+// ====== Scenario-based Safety Evaluation ======
+const SAFETY_THRESHOLDS = {
+  resin: {
+    segmentectomy: { tumorOpt:300, tumorMin:250, ntadMax:null, lungMax:15, tumorRef:'Hermann 2024', ntadRef:'Ablation intent', lungRef:'KLCA' },
+    lobectomy: { tumorOpt:250, tumorMin:100, ntadMax:70, lungMax:15, tumorRef:'NCT04172714/SARAH', ntadRef:'Strigari 2010', lungRef:'KLCA' },
+    largeHCC: { tumorOpt:157, tumorMin:100, ntadMax:70, wlMax:40, lungMax:15, tumorRef:'Hermann 2020/Doyle', ntadRef:'Strigari 2010', lungRef:'KLCA' },
+    unilobar: { tumorOpt:250, tumorMin:150, ntadMax:70, lungMax:15, tumorRef:'NCT04172714/STRATUM', ntadRef:'Strigari/CIRT', lungRef:'KLCA' },
+    bilobar: { tumorOpt:150, tumorMin:100, ntadMax:40, wlMax:40, lungMax:15, tumorRef:'Hermann 2020', ntadRef:'Strigari 2010', lungRef:'KLCA' },
+    pvt: { tumorOpt:150, tumorMin:100, ntadMax:70, lungMax:15, tumorRef:'Hermann 2020', ntadRef:'Strigari/CIRT', lungRef:'KLCA' },
+  },
+  glass: {
+    segmentectomy: { tumorOpt:400, tumorMin:400, ntadMax:null, lungMax:25, tumorRef:'LEGACY 2021', ntadRef:'Ablation intent', lungRef:'KLCA' },
+    lobectomy: { tumorOpt:250, tumorMin:205, ntadMax:120, lungMax:25, tumorRef:'DOSISPHERE-01', ntadRef:'2022 EJNMMI', lungRef:'KLCA' },
+    largeHCC: { tumorOpt:250, tumorMin:205, ntadMax:120, wlMax:75, lungMax:25, tumorRef:'DOSISPHERE-01', ntadRef:'2022 EJNMMI', lungRef:'KLCA' },
+    unilobar: { tumorOpt:250, tumorMin:205, ntadMax:100, lungMax:25, tumorRef:'DOSISPHERE-01', ntadRef:'2022 EJNMMI', lungRef:'KLCA' },
+    bilobar: { tumorOpt:250, tumorMin:205, ntadMax:70, lungMax:25, tumorRef:'DOSISPHERE-01', ntadRef:'2022 EJNMMI', lungRef:'KLCA' },
+    pvt: { tumorOpt:250, tumorMin:205, ntadMax:120, lungMax:25, tumorRef:'DOSISPHERE-01', ntadRef:'2022 EJNMMI', lungRef:'KLCA' },
   }
-  if(lsf!=null) items.push({ icon: lsf<=10?'✅':lsf<=20?'⚠️':'❌', text: `LSF ${lsf.toFixed(1)}%`, ref:'' });
+};
+
+function evalSafety(micro, tumorDose, ntad, wlNtad, lungDose, lsf, scenario, cps) {
+  const items = [];
+  const th = (SAFETY_THRESHOLDS[micro]||{})[scenario||'segmentectomy'] || SAFETY_THRESHOLDS[micro]?.segmentectomy;
+  if (!th) return items;
+
+  // CPS-adjusted NTAD for PVT/unilobar
+  let ntadLimit = th.ntadMax;
+  if ((scenario==='pvt'||scenario==='unilobar') && cps==='B') {
+    ntadLimit = micro==='resin' ? 50 : 70; // stricter for CPS B
+  }
+
+  // Tumor dose
+  const td = tumorDose || 0;
+  items.push({
+    icon: td>=th.tumorOpt?'✅':td>=th.tumorMin?'⚠️':'❌',
+    text: `Tumor ${td.toFixed(1)} Gy (optimal ≥${th.tumorOpt}, min ≥${th.tumorMin})`,
+    ref: th.tumorRef
+  });
+
+  // NTAD
+  if (ntad!=null && ntadLimit!=null) {
+    items.push({
+      icon: ntad<=ntadLimit?'✅':ntad<=52?'⚠️':'❌',
+      text: `NTAD ${ntad.toFixed(1)} Gy (${scenario} limit <${ntadLimit}${cps==='B'?' CPS B':''})`,
+      ref: th.ntadRef
+    });
+  } else if (ntad!=null && ntadLimit==null) {
+    items.push({ icon: '✅', text: `NTAD ${ntad.toFixed(1)} Gy (ablation intent — 제한 없음)`, ref: th.ntadRef });
+  }
+
+  // WL NTAD
+  const wlMax = th.wlMax || 40;
+  if (wlNtad!=null) {
+    items.push({
+      icon: wlNtad<=wlMax?'✅':wlNtad<=52?'⚠️':'❌',
+      text: `WL NTAD ${wlNtad.toFixed(1)} Gy (safe <${wlMax}, TD50 52)`,
+      ref: 'Strigari 2010'
+    });
+  }
+
+  // Lung
+  if (lungDose!=null) {
+    items.push({
+      icon: lungDose<=th.lungMax?'✅':lungDose<=30?'⚠️':'❌',
+      text: `Lung ${lungDose.toFixed(1)} Gy (Korean <${th.lungMax})`,
+      ref: th.lungRef
+    });
+  }
+
+  // LSF
+  if (lsf!=null) items.push({ icon: lsf<=10?'✅':lsf<=20?'⚠️':'❌', text: `LSF ${lsf.toFixed(1)}%`, ref:'' });
+
   return items;
 }
 
-function renderSafety(containerId, items) {
+function renderSafety(containerId, items, scenario) {
   const el = document.getElementById(containerId);
   if (!el) return;
   if (!items.length) { el.innerHTML=''; return; }
-  el.innerHTML = `<div class="card"><h3>안전성 평가${containerId.includes('partition')?' (④ Prescribed 기준)':''}</h3>${items.map(s=>`<div class="safety-item"><span class="safety-icon">${s.icon}</span><div><div class="safety-text">${s.text}</div>${s.ref?`<div class="safety-ref">${s.ref}</div>`:''}</div></div>`).join('')}</div>`;
+  const scenarioNames = {segmentectomy:'RS',lobectomy:'Lobectomy',largeHCC:'Large HCC',unilobar:'MF Unilobar',bilobar:'MF Bilobar',pvt:'MVI/PVT'};
+  const label = scenarioNames[scenario] || scenario || '';
+  el.innerHTML = `<div class="card"><h3>안전성 평가 — ${label}${containerId.includes('partition')?' (④ Prescribed 기준)':''}</h3>${items.map(s=>`<div class="safety-item"><span class="safety-icon">${s.icon}</span><div><div class="safety-text">${s.text}</div>${s.ref?`<div class="safety-ref">${s.ref}</div>`:''}</div></div>`).join('')}</div>`;
 }
 
 function renderCases(containerId, micro) {
@@ -371,9 +430,10 @@ function calcPartitionAll() {
     wlNtad = (Vn * safetyNtad) / totalNormal;
   }
 
-  // Safety — rendered on button click, not auto
-  // Store for button use
-  window._partitionSafety = { micro, safetyTumor, safetyNtad, wlNtad, safetyLung, LSF };
+  // Safety — rendered on button click
+  const pScenario = document.getElementById('p_scenario')?.value || 'segmentectomy';
+  const pCps = document.getElementById('p_cps')?.value || 'A';
+  window._partitionSafety = { micro, safetyTumor, safetyNtad, wlNtad, safetyLung, LSF, scenario: pScenario, cps: pCps };
 }
 
 // MAA auto-calc
@@ -433,8 +493,10 @@ function calcMIRDAll() {
 
   buildTimeTable();
 
-  const safety = evalSafety(micro, Dd, null, null, lungD, LSF);
-  renderSafety('mirdSafety', safety);
+  const mScenario = document.getElementById('m_scenario')?.value || 'segmentectomy';
+  const mCps = document.getElementById('m_cps')?.value || 'A';
+  const safety = evalSafety(micro, Dd, null, null, lungD, LSF, mScenario, mCps);
+  renderSafety('mirdSafety', safety, mScenario);
   renderCases('mirdCases', micro);
 }
 
@@ -489,8 +551,9 @@ function calcSimplicityAll() {
   const ld = parseFloat(document.getElementById('s_lungDose').value);
   const pf = parseFloat(document.getElementById('s_perfFrac').value);
 
-  const safety = evalSafety(micro, td||0, isNaN(ntad)?null:ntad, isNaN(wlNtad)?null:wlNtad, isNaN(ld)?null:ld, null);
-  renderSafety('simplicitySafety', safety);
+  const sScenario = document.querySelector('#tab-simplicity .scenario-tab.active')?.dataset?.scenario || 'segmentectomy';
+  const safety = evalSafety(micro, td||0, isNaN(ntad)?null:ntad, isNaN(wlNtad)?null:wlNtad, isNaN(ld)?null:ld, null, sScenario);
+  renderSafety('simplicitySafety', safety, sScenario);
   renderCases('simplicityCases', micro);
 }
 
@@ -610,8 +673,8 @@ function init() {
     calcPartitionAll();
     const d = window._partitionSafety;
     if(d) {
-      const safety = evalSafety(d.micro, d.safetyTumor, d.safetyNtad, d.wlNtad, d.safetyLung, d.LSF);
-      renderSafety('partitionSafety', safety);
+      const safety = evalSafety(d.micro, d.safetyTumor, d.safetyNtad, d.wlNtad, d.safetyLung, d.LSF, d.scenario, d.cps);
+      renderSafety('partitionSafety', safety, d.scenario);
       renderCases('partitionCases', d.micro);
     }
     document.getElementById('partitionSafety').style.display = 'block';
