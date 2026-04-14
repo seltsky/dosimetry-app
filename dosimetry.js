@@ -19,6 +19,8 @@ function savePartitionCase() {
     savedAt: new Date().toISOString(),
     model: 'Partition',
     micro: tabMicro.partition,
+    hospital: document.getElementById('p_hospital')?.value || '',
+    mrn: document.getElementById('p_mrn')?.value || '',
     patId: document.getElementById('p_patId')?.value || '',
     sex: document.getElementById('p_sex')?.value || '',
     age: document.getElementById('p_age')?.value || '',
@@ -63,6 +65,8 @@ function saveMIRDCase() {
     savedAt: new Date().toISOString(),
     model: 'MIRD',
     micro: tabMicro.mird,
+    hospital: document.getElementById('m_hospital')?.value || '',
+    mrn: document.getElementById('m_mrn')?.value || '',
     patId: document.getElementById('m_patId')?.value || '',
     sex: document.getElementById('m_sex')?.value || '',
     age: document.getElementById('m_age')?.value || '',
@@ -112,7 +116,7 @@ function renderCaseList() {
   let filtered = cases;
   if (search) {
     filtered = cases.filter(c => {
-      const text = [c.patId, c.memo, c.dx, c.scenario, c.micro, c.date].join(' ').toLowerCase();
+      const text = [c.hospital, c.mrn, c.patId, c.memo, c.dx, c.scenario, c.micro, c.date].join(' ').toLowerCase();
       return text.includes(search);
     });
   }
@@ -138,7 +142,7 @@ function renderCaseList() {
   container.innerHTML = filtered.map(c => `
     <div class="case-card" data-id="${c.id}">
       <div class="case-header">
-        <span class="case-id">${c.patId || '익명'} ${c.sex?'('+c.sex+(c.age?'/'+c.age:'')+')':''}</span>
+        <span class="case-id">${c.hospital?c.hospital+' ':''}${c.mrn?'#'+c.mrn+' ':''}${c.patId || '익명'} ${c.sex?'('+c.sex+(c.age?'/'+c.age:'')+')':''}</span>
         <span class="case-date">${c.date||'날짜없음'}</span>
       </div>
       <div class="case-tags">
@@ -190,7 +194,7 @@ function loadCaseToTab(c) {
     document.querySelector('[data-tab="partition"]').classList.add('active');
     document.getElementById('tab-partition').classList.add('active');
     // Fill values
-    const fields = {p_liverVol:'liverVol',p_tumorVol:'tumorVol',p_wholeVol:'wholeVol',p_tn:'tn',p_lsf:'lsf',p_lungMass:'lungMass',p_desiredDose:'desiredDose',p_liverLimit:'liverLimit',p_lungLimit:'lungLimit',p_prescribedA:'prescribedA',p_cps:'cps',p_intent:'intent',p_scenario:'scenario',p_memo:'memo',p_patId:'patId',p_sex:'sex',p_age:'age',p_dx:'dx',p_date:'date'};
+    const fields = {p_hospital:'hospital',p_mrn:'mrn',p_liverVol:'liverVol',p_tumorVol:'tumorVol',p_wholeVol:'wholeVol',p_tn:'tn',p_lsf:'lsf',p_lungMass:'lungMass',p_desiredDose:'desiredDose',p_liverLimit:'liverLimit',p_lungLimit:'lungLimit',p_prescribedA:'prescribedA',p_cps:'cps',p_intent:'intent',p_scenario:'scenario',p_memo:'memo',p_patId:'patId',p_sex:'sex',p_age:'age',p_dx:'dx',p_date:'date'};
     Object.entries(fields).forEach(([elId, key]) => {
       const el = document.getElementById(elId);
       if (el && c[key]) el.value = c[key];
@@ -205,7 +209,7 @@ function loadCaseToTab(c) {
     document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
     document.querySelector('[data-tab="mird"]').classList.add('active');
     document.getElementById('tab-mird').classList.add('active');
-    const fields = {m_targetVol:'targetVol',m_desiredDose:'desiredDose',m_lsf:'lsf',m_residual:'residual',m_lungMass:'lungMass',m_prevLung:'prevLung',m_cps:'cps',m_intent:'intent',m_scenario:'scenario',m_memo:'memo',m_patId:'patId',m_sex:'sex',m_age:'age',m_dx:'dx',m_date:'date'};
+    const fields = {m_hospital:'hospital',m_mrn:'mrn',m_targetVol:'targetVol',m_desiredDose:'desiredDose',m_lsf:'lsf',m_residual:'residual',m_lungMass:'lungMass',m_prevLung:'prevLung',m_cps:'cps',m_intent:'intent',m_scenario:'scenario',m_memo:'memo',m_patId:'patId',m_sex:'sex',m_age:'age',m_dx:'dx',m_date:'date'};
     Object.entries(fields).forEach(([elId, key]) => {
       const el = document.getElementById(elId);
       if (el && c[key]) el.value = c[key];
