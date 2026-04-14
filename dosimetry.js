@@ -311,13 +311,20 @@ function renderRefs() {
 
 // ====== Init ======
 function init() {
-  // Main tabs
+  // Main tabs — hide partition safety when switching away
   document.querySelectorAll('.tabs .tab').forEach(tab=>{
     tab.addEventListener('click',()=>{
       document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+      // Reset eval button and hide safety on tab switch
+      const ps = document.getElementById('partitionSafety');
+      const pc = document.getElementById('partitionCases');
+      const eb = document.getElementById('partitionEvalBtn');
+      if(ps) ps.style.display='none';
+      if(pc) pc.style.display='none';
+      if(eb) eb.textContent='안전성 평가 ▼';
       if(tab.dataset.tab==='refs') renderRefs();
     });
   });
