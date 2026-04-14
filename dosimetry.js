@@ -307,26 +307,7 @@ function renderResults(input, result, mird, safety) {
     html += `</div></div>`;
   }
 
-  // Report text
-  const reportText = generateReport(input, result, safety);
-  html += `
-    <div class="card">
-      <div class="result-section">
-        <h3>보고서 텍스트</h3>
-        <div class="report-box" id="reportText">${reportText}</div>
-        <button class="copy-btn" id="copyBtn">복사하기</button>
-      </div>
-    </div>
-  `;
-
   container.innerHTML = html;
-
-  document.getElementById('copyBtn').addEventListener('click', () => {
-    navigator.clipboard.writeText(reportText).then(() => {
-      document.getElementById('copyBtn').textContent = '복사됨! ✓';
-      setTimeout(() => document.getElementById('copyBtn').textContent = '복사하기', 2000);
-    });
-  });
 }
 
 // ====== Render References ======
