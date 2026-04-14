@@ -7,6 +7,7 @@ fetch('references.json').then(r=>r.json()).then(d=>{ REFS=d; renderRefs(); }).ca
 
 const C = 49670; // Gy·g/GBq
 const tabMicro = { partition:'resin', mird:'glass', simplicity:'resin' };
+const tabScenario = { partition:'segmentectomy', mird:'segmentectomy', simplicity:'segmentectomy' };
 
 // ====== Dose Guides (journal refs) ======
 const GUIDES = {
@@ -29,10 +30,29 @@ const GUIDES = {
   ],
 };
 
-function renderGuide(containerId, micro) {
+const SCENARIO_GUIDES = {
+  resin: {
+    segmentectomy: [['Tumor (optimal)','≥300 Gy','Hermann 2024'],['Tumor (min)','≥250 Gy','NCT04172714'],['MIRD enough','','Salem 2021'],['Lung','<15 Gy','KLCA']],
+    lobectomy: [['Tumor (Partition)','≥250 Gy','NCT04172714'],['Tumor (MIRD)','≥100 Gy','Hermann 2020'],['NTAD','~70 Gy','Strigari 2010'],['Lung','<15 Gy','KLCA']],
+    largeHCC: [['Tumor','100~157 Gy','Hermann 2020/Doyle'],['STRATUM','150 Gy','NCT03000439'],['NTAD','<40~70 Gy','Strigari 2010'],['Lung','<15 Gy','KLCA']],
+    unilobar: [['Tumor','≥250 Gy','NCT04172714'],['NTAD','40~70 Gy','Strigari/CIRT'],['MIRD','≥150 Gy','STRATUM'],['Lung','<15 Gy','KLCA']],
+    bilobar: [['Tumor','>100 Gy','Hermann 2020'],['NTAD','<40 Gy','Strigari 2010'],['Lung','<15 Gy','KLCA']],
+    pvt: [['Tumor','>100 Gy','Hermann 2020'],['NTAD CPS A','>70 Gy','Strigari/CIRT'],['NTAD CPS B','40~70 Gy','Strigari'],['Lung','<15 Gy','KLCA']],
+  },
+  glass: {
+    segmentectomy: [['Perfused','≥400 Gy','Salem 2021 LEGACY'],['Necrosis','400 Gy','LEGACY'],['MIRD enough','','Salem 2021'],['Lung M/F','<25/<20 Gy','KLCA']],
+    lobectomy: [['Tumor (Partition)','>205, ideally >250','Garin 2021 DOSISPHERE'],['Tumor (MIRD)','>150 Gy','Garin 2021'],['NTAD','<120 Gy','2022 EJNMMI'],['Lung M/F','<25/<20 Gy','KLCA']],
+    largeHCC: [['Tumor','>205 (pref 250)','Garin 2021'],['NTAD','<120 Gy','2022 EJNMMI'],['Reserve','>30%','2022 EJNMMI'],['Lung M/F','<25/<20 Gy','KLCA']],
+    unilobar: [['Tumor','>205 (ideal 250)','Garin 2021'],['NTAD CPS A','<100 Gy','2022 EJNMMI'],['NTAD CPS B','<70 Gy','2022 EJNMMI'],['Lung M/F','<25/<20 Gy','KLCA']],
+    bilobar: [['Tumor','>205 (ideal 250)','Garin 2021'],['NTAD CPS A','40~70 Gy','2022 EJNMMI'],['Lung M/F','<25/<20 Gy','KLCA']],
+    pvt: [['Tumor','>205 (ideal 250)','Garin 2021'],['NTAD','<120 Gy','2022 EJNMMI'],['NTAD CPS B','<70 Gy','2022 EJNMMI'],['Lung M/F','<25/<20 Gy','KLCA']],
+  }
+};
+
+function renderGuide(containerId, micro, scenario) {
   const el = document.getElementById(containerId);
   if (!el) return;
-  const g = GUIDES[micro] || [];
+  const g = (SCENARIO_GUIDES[micro]||{})[scenario||'segmentectomy'] || GUIDES[micro] || [];
   el.innerHTML = g.map(r => `<div class="dose-guide-row"><span class="dose-guide-scenario">${r[0]}</span><span class="dose-guide-dose">${r[1]}</span></div><div style="font-size:10px;color:var(--dim);padding:0 0 3px 8px">${r[2]}</div>`).join('');
 }
 
@@ -139,13 +159,23 @@ function calcPartitionAll() {
 
 // MAA auto-calc
 function calcMAA() {
-  const lung = parseFloat(document.getElementById('p_maaLung').value) || 0;
-  const liver = parseFloat(document.getElementById('p_maaLiver').value) || 0;
-  const tumor = parseFloat(document.getElementById('p_maaTumor').value) || 0;
-  const Vt = parseFloat(document.getElementById('p_tumorVol').value) || 0;
-  const V = parseFloat(document.getElementById('p_liverVol').value) || 0;
+  const R = parseFloat(document.getElementById('p_maaR')?.value) || 0;
+  const L = parseFloat(document.getElementById('p_maaL')?.value) || 0;
+  const lung = R + L;
+  const liver = parseFloat(document.getElementById('p_maaLiver')?.value) || 0;
+  const tumor = parseFloat(document.getElementById('p_maaTumor')?.value) || 0;
+  const Vt = parseFloat(document.getElementById('p_tumorVol')?.value) || 0;
+  const V = parseFloat(document.getElementById('p_liverVol')?.value) || 0;
+
+  // Display totals
+  set('p_maaLungTotal', lung>0?lung.toFixed(1):'—');
+  const normalCounts = liver>0&&tumor>0?liver-tumor:0;
+  set('p_maaNormal', normalCounts>0?normalCounts.toFixed(0):'—');
+  set('p_normalVol', V>0&&Vt>0?(V-Vt).toFixed(1):'—');
+  set('p_dispLiverVol', V>0?V.toFixed(1):'—');
+  set('p_dispTumorVol', Vt>0?Vt.toFixed(1):'—');
+
   if (lung>0 && liver>0 && tumor>0 && Vt>0 && V>0) {
-    const normalCounts = liver - tumor;
     const Vn = V - Vt;
     const tn = (tumor/Vt) / (normalCounts/Vn);
     const lsf = (lung / (lung + liver)) * 100;
@@ -153,8 +183,8 @@ function calcMAA() {
     document.getElementById('p_lsf').value = lsf.toFixed(2);
     set('p_maaTN', tn.toFixed(2));
     set('p_maaLSF', lsf.toFixed(2)+'%');
-    calcPartitionAll();
   }
+  calcPartitionAll();
 }
 
 // ====== MIRD TAB — Real-time calc + Time Table ======
@@ -291,10 +321,21 @@ function init() {
       document.querySelectorAll(`.micro-btn[data-parent="${parent}"]`).forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       tabMicro[parent] = btn.dataset.micro;
-      renderGuide(parent+'Guide', btn.dataset.micro);
+      renderGuide(parent+'Guide', btn.dataset.micro, tabScenario[parent]);
       if(parent==='partition') { document.getElementById('p_liverLimit').value=btn.dataset.micro==='resin'?70:120; document.getElementById('p_lungLimit').value=btn.dataset.micro==='resin'?15:25; calcPartitionAll(); }
       if(parent==='mird') calcMIRDAll();
       if(parent==='simplicity') calcSimplicityAll();
+    });
+  });
+
+  // Scenario tabs per tab
+  document.querySelectorAll('.scenario-tab').forEach(tab=>{
+    tab.addEventListener('click',()=>{
+      const parent = tab.dataset.parent;
+      document.querySelectorAll(`.scenario-tab[data-parent="${parent}"]`).forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      tabScenario[parent] = tab.dataset.scenario;
+      renderGuide(parent+'Guide', tabMicro[parent], tab.dataset.scenario);
     });
   });
 
@@ -303,7 +344,7 @@ function init() {
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', calcPartitionAll);
   });
-  ['p_maaLung','p_maaLiver','p_maaTumor'].forEach(id=>{
+  ['p_maaR','p_maaL','p_maaLiver','p_maaTumor','p_liverVol','p_tumorVol'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', calcMAA);
   });
@@ -327,9 +368,9 @@ function init() {
   });
 
   // Initial render
-  renderGuide('partitionGuide','resin');
-  renderGuide('mirdGuide','glass');
-  renderGuide('simplicityGuide','resin');
+  renderGuide('partitionGuide','resin','segmentectomy');
+  renderGuide('mirdGuide','glass','segmentectomy');
+  renderGuide('simplicityGuide','resin','segmentectomy');
 }
 
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init);
