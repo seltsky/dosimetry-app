@@ -145,7 +145,7 @@ header h1 { font-size: 22px; color: var(--accent); }
 .model-col { flex:1; background:var(--bg); border:1px solid var(--border); border-radius:10px; padding:12px; }
 .model-header { font-size:12px; font-weight:700; text-align:center; padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:8px; }
 .partition-header { color:var(--accent); }
-.mird-header { color:#f39c12; }
+.mird-header { color:#95a5a6; }
 .model-value-big { text-align:center; font-size:28px; font-weight:800; color:var(--text); margin:8px 0; }
 .model-unit { font-size:14px; color:var(--dim); font-weight:600; }
 .model-rows .result-row { padding:4px 0; font-size:11px; }

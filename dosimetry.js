@@ -221,7 +221,7 @@ function generateReport(input, result, safety) {
   if (result.wlNtad !== null) lines.push(`WL NTAD: ${result.wlNtad} Gy`);
   lines.push(`Lung AD: ${result.lungDose} Gy`);
   lines.push('');
-  lines.push(`[MIRD (Simplicity)]`);
+  lines.push(`[MIRD (Single Compartment)]`);
   const mirdData = calcMIRD(input);
   lines.push(`Activity: ${mirdData.activity} GBq`);
   lines.push(`Tumor AD: ${mirdData.tumorDose} Gy | NTAD: ${mirdData.normalDose} Gy`);
@@ -256,7 +256,7 @@ function renderResults(input, result, mird, safety) {
           </div>
         </div>
         <div class="model-col">
-          <div class="model-header mird-header">MIRD (Simplicity)</div>
+          <div class="model-header mird-header">MIRD (Single Compartment)</div>
           <div class="model-value-big">${mird.activity} <span class="model-unit">GBq</span></div>
           <div class="model-rows">
             <div class="result-row"><span class="result-label">Tumor AD</span><span class="result-value">${mird.tumorDose} Gy</span></div>
@@ -267,7 +267,7 @@ function renderResults(input, result, mird, safety) {
           </div>
         </div>
       </div>
-      <div class="model-note">※ Partition이 T/N ratio 반영하여 더 정확. MIRD는 보수적(higher activity). Simplicity 결과와 비교해주세요.</div>
+      <div class="model-note">※ Partition = multi-compartment (T/N ratio 반영, Simplicity personalized dosimetry와 동일). MIRD = single compartment (보수적). Simplicity 결과와 Partition 값을 비교하세요.</div>
 
       <div class="result-section" style="margin-top:12px">
         ${result.perfusedFraction!==null ? `<div class="result-row"><span class="result-label">Perfused Fraction</span><span class="result-value">${result.perfusedFraction}%</span></div>` : ''}
