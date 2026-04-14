@@ -211,51 +211,58 @@ function calcMIRDAll() {
   set('m_cumLung', cumLung.toFixed(2)+' Gy', cumLung<=50?'safe':'danger');
   set('m_lungStatus', lungD<=lungLimit?'✅ Within limit':'❌ Exceeds limit');
 
-  // Time table
-  buildTimeTable(A, Vt, LSF, res, Lm, Dd);
+  // Set dose size slider to closest standard size
+  const sizes = [3,5,7,10,12,15,20];
+  const closest = sizes.reduce((a,b)=>Math.abs(b-A)<Math.abs(a-A)?b:a);
+  document.getElementById('m_doseSize').value = closest;
+  document.getElementById('m_doseSizeNum').value = closest;
+
+  buildTimeTable();
 
   const safety = evalSafety(micro, Dd, null, null, lungD, LSF);
   renderSafety('mirdSafety', safety);
   renderCases('mirdCases', micro);
 }
 
-function buildTimeTable(reqA, vol, lsf, res, lungMass, desiredDose) {
+function buildTimeTable() {
   const el = document.getElementById('mirdTimeTable');
   if (!el) return;
+  const vol = parseFloat(document.getElementById('m_targetVol')?.value) || 0;
+  const desiredDose = parseFloat(document.getElementById('m_desiredDose')?.value) || 150;
+  const lsf = parseFloat(document.getElementById('m_lsf')?.value) || 0;
+  const res = parseFloat(document.getElementById('m_residual')?.value) || 0;
+  const sz = parseFloat(document.getElementById('m_doseSizeNum')?.value) || 3;
+
+  if (!vol) { el.innerHTML='<div class="empty-state">Target Volume을 입력하세요</div>'; return; }
+
   const mass = vol * 1.03 / 1000;
   const hl = 64.1;
   const lambda = Math.log(2) / hl;
-  const tzOff = 14; // Korea
-
-  const sizes = [3,5,7,10,12,15,20];
-  const closest = sizes.reduce((a,b)=>Math.abs(b-reqA)<Math.abs(a-reqA)?b:a);
-  const show = sizes.filter(s=>Math.abs(sizes.indexOf(s)-sizes.indexOf(closest))<=1);
+  const tzOff = 14;
 
   const days = ['Sun(Cal)','Mon','Tue','Wed','Thu','Fri','Sat','Sun','Mon','Tue'];
-  const times = ['08:00','12:00','16:00','20:00'];
+  const times = ['08:00','10:00','12:00','14:00','16:00','18:00','20:00'];
 
-  let html = '';
-  for (const sz of show) {
-    html += `<div style="font-size:11px;font-weight:700;color:var(--accent);margin:8px 0 4px">${sz} GBq${sz===closest?' ← closest':''}</div>`;
-    html += `<table class="time-table"><tr><th>Time</th>`;
-    days.forEach(d=>html+=`<th>${d}</th>`);
-    html += '</tr>';
-    for (const t of times) {
-      html += `<tr><td class="row-header">${t}</td>`;
-      const [h] = t.split(':').map(Number);
-      for (let di=0; di<days.length; di++) {
-        if (di===0) { html+='<td style="color:var(--dim)">Cal</td>'; continue; }
-        const hrs = di*24 + (h-12) + tzOff;
-        if (hrs<=0) { html+='<td>-</td>'; continue; }
-        const decA = sz * Math.exp(-lambda*hrs);
-        const dose = (decA * 49.67 * (1-lsf/100) * (1-res/100)) / mass;
-        const cls = Math.abs(dose-desiredDose)<desiredDose*0.15?'highlight':'';
-        html += `<td class="${cls}">${dose.toFixed(0)}</td>`;
-      }
-      html += '</tr>';
+  let html = `<table class="time-table"><tr><th>Time</th>`;
+  days.forEach(d => html += `<th>${d}</th>`);
+  html += '</tr>';
+
+  for (const t of times) {
+    html += `<tr><td class="row-header">${t}</td>`;
+    const [h] = t.split(':').map(Number);
+    for (let di = 0; di < days.length; di++) {
+      if (di === 0) { html += '<td style="color:var(--dim)">Cal</td>'; continue; }
+      const hrs = di * 24 + (h - 12) + tzOff;
+      if (hrs <= 0) { html += '<td>-</td>'; continue; }
+      const decA = sz * Math.exp(-lambda * hrs);
+      const dose = (decA * 49.67 * (1 - lsf/100) * (1 - res/100)) / mass;
+      const pctDiff = Math.abs(dose - desiredDose) / desiredDose;
+      const cls = pctDiff < 0.05 ? 'highlight' : pctDiff < 0.15 ? 'highlight' : '';
+      html += `<td class="${cls}">${dose.toFixed(0)}</td>`;
     }
-    html += '</table>';
+    html += '</tr>';
   }
+  html += '</table>';
   el.innerHTML = html;
 }
 
@@ -360,6 +367,14 @@ function init() {
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', calcSimplicityAll);
   });
+
+  // MIRD dose size slider sync
+  const doseSlider = document.getElementById('m_doseSize');
+  const doseNum = document.getElementById('m_doseSizeNum');
+  if (doseSlider && doseNum) {
+    doseSlider.addEventListener('input', () => { doseNum.value = doseSlider.value; buildTimeTable(); });
+    doseNum.addEventListener('input', () => { doseSlider.value = doseNum.value; buildTimeTable(); });
+  }
 
   // Refs
   ['refSearch','refFilter','refMicro'].forEach(id=>{

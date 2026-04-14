@@ -84,49 +84,42 @@
           <div class="p-cell row-cyan" style="flex:1;min-width:45%"><div class="p-label">Whole Liver Vol (선택)</div><input type="number" id="p_wholeVol" class="sheet-input" step="0.1" style="width:80px" placeholder="—"> cm³</div>
         </div>
 
-        <!-- ① Desired Dose — GREEN row -->
-        <div style="border:2px solid rgba(46,139,87,0.4);border-radius:8px;padding:10px;margin-bottom:6px;background:rgba(46,139,87,0.06)">
-          <div style="font-size:11px;font-weight:700;color:#2e8b57;margin-bottom:6px">① Desired Tumor Dose</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px">
-            <div><span style="color:var(--dim)">Lung</span> <span id="p_r1_lung" style="font-weight:700">—</span> Gy</div>
-            <div><span style="color:var(--dim)">Normal</span> <span id="p_r1_normal" style="font-weight:700">—</span> Gy</div>
-            <div style="background:#3d3d00;padding:3px 8px;border-radius:4px"><span style="color:#999">Desired</span> <input type="number" id="p_desiredDose" value="250" step="10" style="width:60px;background:transparent;border:none;color:#ffd700;font-family:monospace;font-weight:700;font-size:13px;text-align:center"> Gy</div>
-            <div style="font-weight:800;color:var(--accent)">→ <span id="p_r1_activity">—</span> GBq</div>
-          </div>
-        </div>
-
-        <!-- ② Liver Limiting — PINK row -->
-        <div style="border:2px solid rgba(199,21,133,0.3);border-radius:8px;padding:10px;margin-bottom:6px;background:rgba(199,21,133,0.05)">
-          <div style="font-size:11px;font-weight:700;color:#c71585;margin-bottom:6px">② Liver Limiting Dose</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px">
-            <div><span style="color:var(--dim)">Lung</span> <span id="p_r2_lung" style="font-weight:700">—</span> Gy</div>
-            <div style="background:#3d3d00;padding:3px 8px;border-radius:4px"><span style="color:#999">Liver Limit</span> <input type="number" id="p_liverLimit" value="70" step="1" style="width:50px;background:transparent;border:none;color:#ffd700;font-family:monospace;font-weight:700;font-size:13px;text-align:center"> Gy</div>
-            <div><span style="color:var(--dim)">Tumor</span> <span id="p_r2_tumor" style="font-weight:700">—</span> Gy</div>
-            <div style="font-weight:800;color:#c71585">→ <span id="p_r2_activity">—</span> GBq</div>
-          </div>
-        </div>
-
-        <!-- ③ Lung Limiting — PURPLE row -->
-        <div style="border:2px solid rgba(138,43,226,0.3);border-radius:8px;padding:10px;margin-bottom:6px;background:rgba(138,43,226,0.05)">
-          <div style="font-size:11px;font-weight:700;color:#8a2be2;margin-bottom:6px">③ Lung Limiting Dose</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px">
-            <div style="background:#3d3d00;padding:3px 8px;border-radius:4px"><span style="color:#999">Lung Limit</span> <input type="number" id="p_lungLimit" value="25" step="1" style="width:50px;background:transparent;border:none;color:#ffd700;font-family:monospace;font-weight:700;font-size:13px;text-align:center"> Gy</div>
-            <div><span style="color:var(--dim)">Normal</span> <span id="p_r3_normal" style="font-weight:700">—</span> Gy</div>
-            <div><span style="color:var(--dim)">Tumor</span> <span id="p_r3_tumor" style="font-weight:700">—</span> Gy</div>
-            <div style="font-weight:800;color:#8a2be2">→ <span id="p_r3_activity">—</span> GBq</div>
-          </div>
-        </div>
-
-        <!-- ④ Prescribed Activity — BLUE row -->
-        <div style="border:2px solid rgba(30,144,255,0.3);border-radius:8px;padding:10px;margin-bottom:6px;background:rgba(30,144,255,0.05)">
-          <div style="font-size:11px;font-weight:700;color:#1e90ff;margin-bottom:6px">④ Prescribed Activity (역계산)</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:12px">
-            <div style="background:#3d3d00;padding:3px 8px;border-radius:4px"><span style="color:#999">Activity</span> <input type="number" id="p_prescribedA" step="0.01" placeholder="입력" style="width:60px;background:transparent;border:none;color:#ffd700;font-family:monospace;font-weight:700;font-size:13px;text-align:center"> GBq</div>
-            <div><span style="color:var(--dim)">Lung</span> <span id="p_r4_lung" style="font-weight:700">—</span> Gy</div>
-            <div><span style="color:var(--dim)">Normal</span> <span id="p_r4_normal" style="font-weight:700">—</span> Gy</div>
-            <div><span style="color:var(--dim)">Tumor</span> <span id="p_r4_tumor" style="font-weight:700">—</span> Gy</div>
-          </div>
-        </div>
+        <!-- 4-step table — Excel grid style -->
+        <table class="calc-table">
+          <thead>
+            <tr><th></th><th>Lung (Gy)</th><th>Normal (Gy)</th><th>Tumor (Gy)</th><th>Activity (GBq)</th></tr>
+          </thead>
+          <tbody>
+            <tr class="row-green">
+              <td class="row-label">① Desired</td>
+              <td id="p_r1_lung" class="calc-val">—</td>
+              <td id="p_r1_normal" class="calc-val">—</td>
+              <td class="calc-input"><input type="number" id="p_desiredDose" value="250" step="10"></td>
+              <td id="p_r1_activity" class="calc-val calc-highlight">—</td>
+            </tr>
+            <tr class="row-pink">
+              <td class="row-label">② Liver Lim</td>
+              <td id="p_r2_lung" class="calc-val">—</td>
+              <td class="calc-input"><input type="number" id="p_liverLimit" value="70" step="1"></td>
+              <td id="p_r2_tumor" class="calc-val">—</td>
+              <td id="p_r2_activity" class="calc-val">—</td>
+            </tr>
+            <tr class="row-purple">
+              <td class="row-label">③ Lung Lim</td>
+              <td class="calc-input"><input type="number" id="p_lungLimit" value="25" step="1"></td>
+              <td id="p_r3_normal" class="calc-val">—</td>
+              <td id="p_r3_tumor" class="calc-val">—</td>
+              <td id="p_r3_activity" class="calc-val">—</td>
+            </tr>
+            <tr class="row-blue">
+              <td class="row-label">④ Prescribed</td>
+              <td id="p_r4_lung" class="calc-val">—</td>
+              <td id="p_r4_normal" class="calc-val">—</td>
+              <td id="p_r4_tumor" class="calc-val">—</td>
+              <td class="calc-input"><input type="number" id="p_prescribedA" step="0.01" placeholder="입력"></td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <!-- Safety + Cases (auto-updates) -->
@@ -177,6 +170,13 @@
 
       <div class="card">
         <h3>⏰ Dose-Time Table (Y-90 decay)</h3>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+          <label style="font-size:12px;color:var(--dim)">Dose Size (GBq):</label>
+          <input type="range" id="m_doseSize" min="1" max="25" value="3" step="0.5" style="flex:1;min-width:100px">
+          <input type="number" id="m_doseSizeNum" value="3" step="0.5" style="width:70px;padding:5px;background:#3d3d00;border:1px solid #666600;border-radius:4px;color:#ffd700;font-family:monospace;font-weight:700;text-align:center;font-size:13px">
+          <span style="font-size:12px;color:var(--dim)">GBq</span>
+        </div>
+        <div style="font-size:11px;color:var(--dim);margin-bottom:6px">Target dose ±15% 범위 하이라이트</div>
         <div id="mirdTimeTable" class="time-table-container"></div>
       </div>
 

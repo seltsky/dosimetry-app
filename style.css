@@ -128,4 +128,21 @@ header h1 { font-size:20px; color:var(--accent); }
 .time-table td.highlight { background:rgba(0,180,216,0.15); color:var(--accent); font-weight:700; }
 .time-table .row-header { text-align:left; font-weight:600; color:var(--dim); white-space:nowrap; }
 
+/* 4-step calc table */
+.calc-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+.calc-table th { padding:6px 4px; text-align:center; font-size:10px; color:var(--dim); font-weight:600; border-bottom:2px solid var(--border); }
+.calc-table td { padding:6px 4px; text-align:center; border:1px solid rgba(30,48,80,0.3); font-family:monospace; }
+.calc-table .row-label { text-align:left; font-weight:700; font-size:11px; white-space:nowrap; font-family:sans-serif; }
+.calc-val { font-weight:600; }
+.calc-highlight { font-weight:800; color:var(--accent) !important; font-size:13px; }
+.calc-input input { width:55px; padding:4px; background:#3d3d00; border:1px solid #666600; border-radius:3px; color:#ffd700; text-align:center; font-family:monospace; font-weight:700; font-size:12px; }
+.row-green td { background:rgba(46,139,87,0.08); }
+.row-green .row-label { color:#2e8b57; }
+.row-pink td { background:rgba(199,21,133,0.06); }
+.row-pink .row-label { color:#c71585; }
+.row-purple td { background:rgba(138,43,226,0.06); }
+.row-purple .row-label { color:#8a2be2; }
+.row-blue td { background:rgba(30,144,255,0.06); }
+.row-blue .row-label { color:#1e90ff; }
+
 .empty-state { text-align:center; color:var(--dim); padding:40px 20px; font-size:14px; }
