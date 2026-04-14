@@ -267,7 +267,27 @@ function renderResults(input, result, mird, safety) {
           </div>
         </div>
       </div>
-      <div class="model-note">※ Partition = multi-compartment (T/N ratio 반영, Simplicity personalized dosimetry와 동일). MIRD = single compartment (보수적). Simplicity 결과와 Partition 값을 비교하세요.</div>
+      <div class="model-note">※ Partition = multi-compartment (T/N ratio 반영, Simplicity personalized dosimetry와 동일). MIRD = single compartment (보수적).</div>
+    </div>
+
+    <div class="card">
+      <div class="result-section">
+        <h3>4단계 계산 (Partition Model)</h3>
+        <div style="font-size:12px">
+          <div class="result-row" style="background:rgba(0,180,216,0.05);padding:8px;border-radius:6px;margin-bottom:4px">
+            <span class="result-label"><strong>① Desired Tumor Dose ${result.tumorDose} Gy</strong></span>
+            <span class="result-value">A = ${result.activity} GBq | NTAD ${result.normalDose} Gy | Lung ${result.lungDose} Gy</span>
+          </div>
+          <div class="result-row" style="padding:8px;margin-bottom:4px">
+            <span class="result-label"><strong>② Liver Limiting (NTAD ${input.microsphere==='resin'?70:120} Gy)</strong></span>
+            <span class="result-value">Tumor ${result.liverLimitTumorDose} Gy</span>
+          </div>
+          <div class="result-row" style="padding:8px;margin-bottom:4px">
+            <span class="result-label"><strong>③ Lung Limiting (${input.microsphere==='resin'?15:25} Gy)</strong></span>
+            <span class="result-value">A = ${((input.microsphere==='resin'?15:25) * (input.lungMass||1000) / (49670 * (input.lsf/100))).toFixed(2)} GBq</span>
+          </div>
+        </div>
+      </div>
 
       <div class="result-section" style="margin-top:12px">
         ${result.perfusedFraction!==null ? `<div class="result-row"><span class="result-label">Perfused Fraction</span><span class="result-value">${result.perfusedFraction}%</span></div>` : ''}
@@ -513,6 +533,117 @@ function init() {
     document.querySelectorAll('.quick-dose').forEach(b => b.classList.toggle('active', parseInt(b.dataset.dose) === rec));
   }
 
+  // ====== MAA Counts Toggle & Calculation ======
+  document.querySelectorAll('.maa-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.maa-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('directInput').style.display = btn.dataset.mode === 'direct' ? 'grid' : 'none';
+      document.getElementById('maaInput').style.display = btn.dataset.mode === 'maa' ? 'block' : 'none';
+    });
+  });
+
+  ['maaLung','maaLiver','maaTumor'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => {
+      const lung = parseFloat(document.getElementById('maaLung').value) || 0;
+      const liver = parseFloat(document.getElementById('maaLiver').value) || 0;
+      const tumor = parseFloat(document.getElementById('maaTumor').value) || 0;
+      if (lung > 0 && liver > 0 && tumor > 0) {
+        const normalLiver = liver - tumor;
+        const lsf = lung / (lung + liver) * 100;
+        const tnRatioCalc = (tumor / parseFloat(document.getElementById('tumorVol').value || 1)) / (normalLiver / (parseFloat(document.getElementById('perfusedVol').value || 1) - parseFloat(document.getElementById('tumorVol').value || 1)));
+        document.getElementById('tnRatio').value = tnRatioCalc.toFixed(2);
+        document.getElementById('lsf').value = lsf.toFixed(2);
+        document.getElementById('maaResult').innerHTML = `T/N Ratio: <strong>${tnRatioCalc.toFixed(2)}</strong> | LSF: <strong>${lsf.toFixed(2)}%</strong> | Normal liver counts: ${normalLiver.toFixed(0)}`;
+      }
+    });
+  });
+
+  // ====== Glass MIRD Time Table ======
+  function calcGlassTimeTable() {
+    const el = document.getElementById('glassTimeTable');
+    if (!el) return;
+    const targetVol = parseFloat(document.getElementById('perfusedVol').value) || 0;
+    const desiredDose = parseInt(document.getElementById('targetDoseSlider').value) || 150;
+    const lsf = parseFloat(document.getElementById('lsf').value) || 0;
+    const residual = parseFloat(document.getElementById('residualWaste').value) || 1;
+    const prevLung = parseFloat(document.getElementById('prevLungDose').value) || 0;
+    const lungMass = parseFloat(document.getElementById('lungMass').value) || 1000;
+
+    if (targetVol <= 0) { el.innerHTML = '<div class="empty-state">Perfused Volume을 입력하세요</div>'; return; }
+
+    const targetMassKg = targetVol * 1.03 / 1000; // liver density ~1.03 g/mL
+    const halfLife = 64.1; // hours
+    const lambda = Math.log(2) / halfLife;
+
+    // Required activity at administration
+    const reqActivity = (desiredDose * targetMassKg) / (49.67 * (1 - lsf/100) * (1 - residual/100));
+
+    // Lung dose
+    const lungDoseCalc = (reqActivity * 49.67 * (lsf/100)) / (lungMass/1000);
+    const cumLung = lungDoseCalc + prevLung;
+
+    // Dose sizes to show
+    const doseSizes = [3, 5, 7, 10, 12, 15, 20];
+    // Days: Sun(calibration), Mon-Sat, Sun-Wed (week 2)
+    const days = ['Sun(Cal)', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed'];
+    const times = ['08:00', '12:00', '16:00', '20:00'];
+    const tzOffset = 14; // Korea = +14h from Eastern
+
+    let html = `<div style="font-size:12px;margin-bottom:8px">`;
+    html += `Required Activity: <strong>${reqActivity.toFixed(2)} GBq</strong> | `;
+    html += `Lung Dose: <strong style="color:${lungDoseCalc<=30?'var(--safe)':'var(--danger)'}">${lungDoseCalc.toFixed(1)} Gy</strong>`;
+    if (prevLung > 0) html += ` (Cumulative: ${cumLung.toFixed(1)} Gy)`;
+    html += `</div>`;
+
+    // Show table for the closest dose size
+    const closestSize = doseSizes.reduce((a, b) => Math.abs(b - reqActivity) < Math.abs(a - reqActivity) ? b : a);
+    const showSizes = [closestSize];
+    if (closestSize > doseSizes[0]) showSizes.unshift(doseSizes[doseSizes.indexOf(closestSize) - 1]);
+    if (closestSize < doseSizes[doseSizes.length - 1]) showSizes.push(doseSizes[doseSizes.indexOf(closestSize) + 1]);
+
+    for (const size of showSizes) {
+      html += `<div style="font-size:11px;font-weight:700;color:var(--accent);margin:8px 0 4px">${size} GBq dose size${size === closestSize ? ' ← closest' : ''}</div>`;
+      html += `<table class="time-table"><tr><th>Time</th>`;
+      days.forEach(d => html += `<th>${d}</th>`);
+      html += `</tr>`;
+
+      for (const time of times) {
+        html += `<tr><td class="row-header">${time}</td>`;
+        const [h] = time.split(':').map(Number);
+        for (let dayIdx = 0; dayIdx < days.length; dayIdx++) {
+          if (dayIdx === 0) {
+            html += `<td style="color:var(--dim)">Cal Day</td>`;
+            continue;
+          }
+          // Hours from calibration (Sunday 12:00 Eastern)
+          const hoursFromCal = dayIdx * 24 + (h - 12) + tzOffset;
+          if (hoursFromCal <= 0) { html += `<td>-</td>`; continue; }
+          // Decayed activity
+          const decayedActivity = size * Math.exp(-lambda * hoursFromCal);
+          // Dose at this time
+          const dose = (decayedActivity * 49.67 * (1 - lsf/100) * (1 - residual/100)) / targetMassKg;
+          const isClose = Math.abs(dose - desiredDose) < desiredDose * 0.15;
+          const cls = isClose ? 'highlight' : dose > desiredDose * 1.5 ? 'warn' : '';
+          html += `<td class="${cls}">${dose.toFixed(0)}</td>`;
+        }
+        html += `</tr>`;
+      }
+      html += `</table>`;
+    }
+
+    el.innerHTML = html;
+  }
+
+  // Show/hide Glass time table
+  function updateGlassPanel() {
+    const micro = document.getElementById('microsphere').value;
+    const card = document.getElementById('glassTimeCard');
+    if (card) card.style.display = micro === 'glass' ? 'block' : 'none';
+    if (micro === 'glass') calcGlassTimeTable();
+  }
+
   // Microsphere toggle
   document.querySelectorAll('.micro-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -520,6 +651,7 @@ function init() {
       btn.classList.add('active');
       document.getElementById('microsphere').value = btn.dataset.micro;
       updateDoseGuide();
+      updateGlassPanel();
     });
   });
 
@@ -538,6 +670,13 @@ function init() {
   });
 
   updateDoseGuide();
+  updateGlassPanel();
+
+  // Recalc glass table on input changes
+  ['targetDoseSlider','perfusedVol','lsf','lungMass','residualWaste','prevLungDose'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => { if (document.getElementById('microsphere').value === 'glass') calcGlassTimeTable(); });
+  });
 
   // Calculate
   document.getElementById('calcBtn').addEventListener('click', () => {

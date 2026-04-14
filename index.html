@@ -92,7 +92,12 @@
 
       <div class="card">
         <h3>Dosimetry 파라미터</h3>
-        <div class="form-grid">
+        <!-- MAA counts toggle -->
+        <div class="maa-toggle">
+          <button class="maa-btn active" data-mode="direct">T/N 직접 입력</button>
+          <button class="maa-btn" data-mode="maa">MAA Counts 입력</button>
+        </div>
+        <div id="directInput" class="form-grid">
           <div class="form-row">
             <label>T/N Ratio</label>
             <input type="number" id="tnRatio" step="0.1" placeholder="예: 4.3">
@@ -101,11 +106,46 @@
             <label>LSF (%)</label>
             <input type="number" id="lsf" step="0.1" placeholder="예: 4.4">
           </div>
+        </div>
+        <div id="maaInput" style="display:none">
+          <div class="form-grid">
+            <div class="form-row">
+              <label>Lung MAA counts</label>
+              <input type="number" id="maaLung" step="1" placeholder="Total lung counts">
+            </div>
+            <div class="form-row">
+              <label>Liver MAA counts (incl tumor)</label>
+              <input type="number" id="maaLiver" step="1" placeholder="Total liver counts">
+            </div>
+            <div class="form-row">
+              <label>Tumor MAA counts</label>
+              <input type="number" id="maaTumor" step="1" placeholder="Tumor counts">
+            </div>
+          </div>
+          <div class="maa-result" id="maaResult"></div>
+        </div>
+        <div class="form-grid" style="margin-top:8px">
           <div class="form-row">
             <label>Lung Mass (g)</label>
             <input type="number" id="lungMass" value="1000" step="1">
           </div>
         </div>
+      </div>
+
+      <!-- Glass MIRD: TheraSphere Time Table (shown only for Glass) -->
+      <div class="card" id="glassTimeCard" style="display:none">
+        <h3>☢️ TheraSphere Dose-Time Table</h3>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Residual Waste (%)</label>
+            <input type="number" id="residualWaste" value="1" step="0.1">
+          </div>
+          <div class="form-row">
+            <label>Previous Lung Dose (Gy)</label>
+            <input type="number" id="prevLungDose" value="0" step="0.1">
+          </div>
+        </div>
+        <div id="glassTimeTable" class="time-table-container"></div>
       </div>
 
       <div class="card">

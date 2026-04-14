@@ -195,4 +195,43 @@ header h1 { font-size: 22px; color: var(--accent); }
 }
 .warning-card .ref-title { color:var(--danger); }
 
+/* MAA Toggle */
+.maa-toggle { display:flex; gap:4px; margin-bottom:12px; }
+.maa-btn {
+  flex:1; padding:8px; border:1px solid var(--border);
+  border-radius:8px; background:none; color:var(--dim);
+  font-size:12px; font-weight:600; cursor:pointer;
+}
+.maa-btn.active { background:rgba(0,180,216,0.1); color:var(--accent); border-color:var(--accent); }
+.maa-result {
+  margin-top:8px; padding:8px 12px;
+  background:rgba(0,180,216,0.05); border-radius:8px;
+  font-size:12px; color:var(--accent);
+}
+
+/* Editable cell highlight */
+.editable-cell {
+  background:rgba(0,180,216,0.08) !important;
+  border:1px dashed var(--accent) !important;
+}
+
+/* Time Table */
+.time-table-container { overflow-x:auto; margin-top:8px; }
+.time-table {
+  width:100%; border-collapse:collapse; font-size:11px;
+}
+.time-table th {
+  background:var(--border); color:var(--text);
+  padding:6px 4px; text-align:center; font-weight:600;
+  position:sticky; top:0;
+}
+.time-table td {
+  padding:4px; text-align:center; border:1px solid rgba(30,48,80,0.3);
+  color:var(--text);
+}
+.time-table td.highlight { background:rgba(0,180,216,0.15); color:var(--accent); font-weight:700; }
+.time-table td.warn { background:rgba(241,196,15,0.1); color:var(--warn); }
+.time-table td.danger { background:rgba(231,76,60,0.1); color:var(--danger); }
+.time-table .row-header { text-align:left; font-weight:600; color:var(--dim); white-space:nowrap; }
+
 .empty-state { text-align:center; color:var(--dim); padding:40px 20px; font-size:14px; }
