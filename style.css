@@ -134,6 +134,8 @@ header h1 { font-size:20px; color:var(--accent); }
 .apply-btn { width:100%; padding:12px; margin-top:10px; background:var(--accent); color:var(--bg); border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; }
 .apply-btn:active { transform:scale(0.98); }
 .patient-info-card { padding:10px 12px; }
+.info-field { display:flex; flex-direction:column; gap:2px; }
+.info-label { font-size:10px; color:var(--dim); font-weight:600; }
 .mini-select { padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; }
 .mini-select:focus { outline:none; border-color:var(--accent); }
 .memo-input { flex:1; min-width:80px; padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; }

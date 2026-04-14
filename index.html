@@ -45,18 +45,19 @@
 
       <!-- Patient Info -->
       <div class="card patient-info-card">
+        <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">환자 정보</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <select id="p_cps" class="mini-select"><option value="A">CPS A</option><option value="B">CPS B</option><option value="C">CPS C</option></select>
-          <select id="p_intent" class="mini-select"><option value="curative">Curative</option><option value="palliative">Palliative</option></select>
-          <select id="p_scenario" class="mini-select">
+          <div class="info-field"><span class="info-label">Child-Pugh</span><select id="p_cps" class="mini-select"><option value="A">A</option><option value="B">B</option><option value="C">C</option></select></div>
+          <div class="info-field"><span class="info-label">Intent</span><select id="p_intent" class="mini-select"><option value="curative">Curative</option><option value="palliative">Palliative</option></select></div>
+          <div class="info-field"><span class="info-label">Scenario</span><select id="p_scenario" class="mini-select">
             <option value="segmentectomy">Segmentectomy</option>
             <option value="lobectomy">Lobectomy</option>
             <option value="largeHCC">Large HCC</option>
             <option value="unilobar">MF Unilobar</option>
             <option value="bilobar">MF Bilobar</option>
             <option value="pvt">MVI/PVT</option>
-          </select>
-          <input type="text" id="p_memo" class="memo-input" placeholder="메모">
+          </select></div>
+          <div class="info-field" style="flex:1;min-width:100px"><span class="info-label">Memo</span><input type="text" id="p_memo" class="memo-input" placeholder="환자명/위치 등"></div>
         </div>
       </div>
 
@@ -142,18 +143,19 @@
 
       <!-- Patient Info -->
       <div class="card patient-info-card">
+        <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">환자 정보</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-          <select id="m_cps" class="mini-select"><option value="A">CPS A</option><option value="B">CPS B</option><option value="C">CPS C</option></select>
-          <select id="m_intent" class="mini-select"><option value="curative">Curative</option><option value="palliative">Palliative</option></select>
-          <select id="m_scenario" class="mini-select">
+          <div class="info-field"><span class="info-label">Child-Pugh</span><select id="m_cps" class="mini-select"><option value="A">A</option><option value="B">B</option><option value="C">C</option></select></div>
+          <div class="info-field"><span class="info-label">Intent</span><select id="m_intent" class="mini-select"><option value="curative">Curative</option><option value="palliative">Palliative</option></select></div>
+          <div class="info-field"><span class="info-label">Scenario</span><select id="m_scenario" class="mini-select">
             <option value="segmentectomy">Segmentectomy</option>
             <option value="lobectomy">Lobectomy</option>
             <option value="largeHCC">Large HCC</option>
             <option value="unilobar">MF Unilobar</option>
             <option value="bilobar">MF Bilobar</option>
             <option value="pvt">MVI/PVT</option>
-          </select>
-          <input type="text" id="m_memo" class="memo-input" placeholder="메모">
+          </select></div>
+          <div class="info-field" style="flex:1;min-width:100px"><span class="info-label">Memo</span><input type="text" id="m_memo" class="memo-input" placeholder="환자명/위치 등"></div>
         </div>
       </div>
 
