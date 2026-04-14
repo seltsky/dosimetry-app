@@ -1,724 +1,337 @@
-/* ========= Y-90 Dosimetry Planner — MVP ========= */
+/* ========= Y-90 Dosimetry Planner v2 — Sheet-based UI ========= */
 (function() {
 'use strict';
 
-// Load references JSON
 let REFS = { thresholds: [], cases: [] };
-fetch('references.json').then(r=>r.json()).then(d=>{ REFS=d; renderRefs(); });
+fetch('references.json').then(r=>r.json()).then(d=>{ REFS=d; renderRefs(); }).catch(()=>{});
 
-// ====== Constants ======
-const RESIN_CONST = 49670; // Gy·g/GBq for resin
-const GLASS_CONST = 49670; // same formula, different thresholds
+const C = 49670; // Gy·g/GBq
+const tabMicro = { partition:'resin', mird:'glass', simplicity:'resin' };
 
-// ====== Thresholds ======
-const THRESHOLDS = {
-  resin: {
-    segmentectomy: { tumorMin: 250, tumorOptimal: 300, ref: 'Hermann 2024' },
-    lobectomy: { tumorPartition: 250, tumorMIRD: 100, ntadMax: 70, ref: 'PPT/NCT04172714' },
-    general: { tumorOR: 176, tumorCR: 247, ref: 'Vouche 2023' },
-    crclm: { tumorMin: 100, ref: 'SARAH/Doyle' },
-    ntad: { safe: 40, td50: 52, ref: 'Strigari 2010' },
-    ntadLobar: { max: 103, ref: 'PMID 40640409' },
-    lung: { korean: 15, western: 30, ref: 'Korean/Salem 2006' },
-  },
-  glass: {
-    segmentectomy: { perfusedMin: 400, ref: 'LEGACY/2025 EJNMMI' },
-    lobectomy: { tumorMin: 205, tumorIdeal: 250, ntadMax: 120, ref: 'DOSISPHERE/2022 EJNMMI' },
-    general: { tumorOR: 290, tumorCR: 481, ref: 'Vouche 2023' },
-    ntad: { uniA: 100, uniB: 70, bi: 70, ref: '2022 EJNMMI' },
-    lung: { koreanM: 25, koreanF: 20, western: 30, ref: 'Korean/Salem 2006' },
-  }
+// ====== Dose Guides (journal refs) ======
+const GUIDES = {
+  resin: [
+    ['RS Tumor (optimal)', '≥300 Gy', 'Hermann 2024, Radiology'],
+    ['RS Tumor (min)', '≥250 Gy', 'NCT04172714'],
+    ['Lobectomy (Partition)', '≥250 Gy', 'NCT04172714'],
+    ['Lobectomy (MIRD)', '≥100 Gy', 'Hermann 2020, Radiology'],
+    ['HCC OR / CR', '≥176 / ≥247 Gy', 'Vouche 2023, JVIR'],
+    ['NTAD safe', '<40 Gy', 'Strigari 2010, JNM (TD50 52)'],
+    ['Lung (Korean)', '<15 Gy/session', 'KLCA Guideline'],
+  ],
+  glass: [
+    ['RS Perfused', '≥400 Gy', 'Salem 2021, J Hepatol (LEGACY)'],
+    ['Lobectomy Tumor', '>205, ideally >250 Gy', 'Garin 2021, Lancet Gastro'],
+    ['HCC OR / CR', '≥290 / ≥481 Gy', 'Vouche 2023, JVIR'],
+    ['NTAD Lobectomy', '<120 Gy', '2022 EJNMMI Consensus'],
+    ['NTAD (whole liver)', '<75 Gy', '2025 EJNMMI Expert'],
+    ['Lung (Korean M/F)', '<25/<20 Gy', 'KLCA Guideline'],
+  ],
 };
 
-// ====== Partition Model Calculation ======
-function calcPartition(input) {
-  const { perfusedVol, tumorVol, tnRatio, lsf, lungMass, targetTumorDose } = input;
-  const normalVol = perfusedVol - tumorVol;
-  const normalDose = targetTumorDose / tnRatio;
-  const perfusedDose = (tumorVol * targetTumorDose + normalVol * normalDose) / perfusedVol;
-  const perfusedMass = perfusedVol;
-  const activity = (perfusedDose * perfusedMass) / (RESIN_CONST * (1 - lsf / 100));
-  const lungDose = (activity * RESIN_CONST * (lsf / 100)) / lungMass;
-
-  let wlNtad = null;
-  if (input.wholeVol && input.wholeVol > 0) {
-    const totalNormalLiver = input.wholeVol - tumorVol;
-    wlNtad = (normalVol * normalDose) / totalNormalLiver;
-  }
-
-  const perfusedFraction = input.wholeVol ? (perfusedVol / input.wholeVol * 100) : null;
-  const ntadLimit = input.microsphere === 'resin' ? 70 : 120;
-  const liverLimitTumorDose = ntadLimit * tnRatio;
-
-  return {
-    activity: Math.round(activity * 100) / 100,
-    tumorDose: targetTumorDose,
-    normalDose: Math.round(normalDose * 100) / 100,
-    perfusedDose: Math.round(perfusedDose * 100) / 100,
-    lungDose: Math.round(lungDose * 100) / 100,
-    wlNtad: wlNtad !== null ? Math.round(wlNtad * 100) / 100 : null,
-    perfusedFraction: perfusedFraction !== null ? Math.round(perfusedFraction * 10) / 10 : null,
-    normalVol,
-    liverLimitTumorDose: Math.round(liverLimitTumorDose),
-  };
-}
-
-// ====== MIRD (Single Compartment) Calculation ======
-function calcMIRD(input) {
-  const { perfusedVol, tumorVol, tnRatio, lsf, lungMass, targetTumorDose } = input;
-  const normalVol = perfusedVol - tumorVol;
-  const perfusedMass = perfusedVol;
-
-  // MIRD: treat perfused volume as single compartment
-  // Set perfused dose = target tumor dose (no T/N differentiation for activity calc)
-  // This gives a HIGHER (more conservative) activity than Partition
-  const mirdPerfusedDose = targetTumorDose;
-  const mirdActivity = (mirdPerfusedDose * perfusedMass) / (RESIN_CONST * (1 - lsf / 100));
-
-  // Back-calculate actual tumor/normal doses with T/N ratio applied
-  const actualPerfusedDose = (mirdActivity * RESIN_CONST * (1 - lsf / 100)) / perfusedMass;
-  const actualTumorDose = actualPerfusedDose * tnRatio * perfusedVol / (tnRatio * tumorVol + normalVol);
-  const actualNormalDose = actualTumorDose / tnRatio;
-
-  const lungDose = (mirdActivity * RESIN_CONST * (lsf / 100)) / lungMass;
-
-  let wlNtad = null;
-  if (input.wholeVol && input.wholeVol > 0) {
-    const totalNormalLiver = input.wholeVol - tumorVol;
-    wlNtad = (normalVol * actualNormalDose) / totalNormalLiver;
-  }
-
-  return {
-    activity: Math.round(mirdActivity * 100) / 100,
-    perfusedDose: Math.round(actualPerfusedDose * 100) / 100,
-    tumorDose: Math.round(actualTumorDose * 100) / 100,
-    normalDose: Math.round(actualNormalDose * 100) / 100,
-    lungDose: Math.round(lungDose * 100) / 100,
-    wlNtad: wlNtad !== null ? Math.round(wlNtad * 100) / 100 : null,
-  };
-}
-
-// ====== Scenario Classification ======
-function classifyScenario(input) {
-  const { perfusedVol, wholeVol, segment, intent } = input;
-  const pf = wholeVol ? (perfusedVol / wholeVol * 100) : null;
-
-  if (intent === 'curative' && pf && pf <= 30) return 'Radiation Segmentectomy';
-  if (pf && pf > 30 && pf <= 60) return 'Radiation Lobectomy';
-  if (pf && pf > 60) return 'Multifocal/Bilobar';
-  if (segment && segment.toLowerCase().includes('caudate')) return 'Caudate Segmentectomy';
-  if (intent === 'palliative') return 'Palliative';
-  return 'General';
+function renderGuide(containerId, micro) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const g = GUIDES[micro] || [];
+  el.innerHTML = g.map(r => `<div class="dose-guide-row"><span class="dose-guide-scenario">${r[0]}</span><span class="dose-guide-dose">${r[1]}</span></div><div style="font-size:10px;color:var(--dim);padding:0 0 3px 8px">${r[2]}</div>`).join('');
 }
 
 // ====== Safety Evaluation ======
-function evaluateSafety(input, result) {
-  const micro = input.microsphere;
-  const th = THRESHOLDS[micro];
+function evalSafety(micro, tumorDose, ntad, wlNtad, lungDose, lsf) {
   const items = [];
-  const scenario = classifyScenario(input);
-
-  // Tumor dose
   if (micro === 'resin') {
-    if (scenario.includes('Segmentectomy')) {
-      items.push({
-        icon: result.tumorDose >= 300 ? '✅' : result.tumorDose >= 250 ? '⚠️' : '❌',
-        text: `종양 선량 ${result.tumorDose} Gy (RS optimal ≥300 Gy, min ≥250 Gy)`,
-        ref: 'Hermann 2024, Radiology',
-        status: result.tumorDose >= 300 ? 'safe' : result.tumorDose >= 250 ? 'warn' : 'danger'
-      });
-    } else {
-      items.push({
-        icon: result.tumorDose >= 247 ? '✅' : result.tumorDose >= 176 ? '⚠️' : '❌',
-        text: `종양 선량 ${result.tumorDose} Gy (CR ≥247 Gy, OR ≥176 Gy)`,
-        ref: 'Vouche 2023, JVIR',
-        status: result.tumorDose >= 247 ? 'safe' : result.tumorDose >= 176 ? 'warn' : 'danger'
-      });
-    }
-  } else { // glass
-    if (scenario.includes('Segmentectomy')) {
-      items.push({
-        icon: result.perfusedDose >= 400 ? '✅' : '⚠️',
-        text: `Perfused dose ${result.perfusedDose} Gy (RS ≥400 Gy)`,
-        ref: 'LEGACY/2025 EJNMMI',
-        status: result.perfusedDose >= 400 ? 'safe' : 'warn'
-      });
-    } else {
-      items.push({
-        icon: result.tumorDose >= 250 ? '✅' : result.tumorDose >= 205 ? '⚠️' : '❌',
-        text: `종양 선량 ${result.tumorDose} Gy (ideal ≥250 Gy, min ≥205 Gy)`,
-        ref: 'DOSISPHERE-01',
-        status: result.tumorDose >= 250 ? 'safe' : result.tumorDose >= 205 ? 'warn' : 'danger'
-      });
-    }
+    items.push({ icon: tumorDose>=300?'✅':tumorDose>=250?'⚠️':tumorDose>=176?'⚠️':'❌', text: `Tumor ${tumorDose?.toFixed(1)||'—'} Gy (RS≥300, OR≥176)`, ref:'Hermann 2024 / Vouche 2023' });
+    if(ntad!=null) items.push({ icon: ntad<=40?'✅':ntad<=52?'⚠️':'❌', text: `NTAD ${ntad.toFixed(1)} Gy (safe<40, TD50 52)`, ref:'Strigari 2010' });
+    if(wlNtad!=null) items.push({ icon: wlNtad<=40?'✅':wlNtad<=52?'⚠️':'❌', text: `WL NTAD ${wlNtad.toFixed(1)} Gy`, ref:'Strigari 2010' });
+    if(lungDose!=null) items.push({ icon: lungDose<=15?'✅':lungDose<=30?'⚠️':'❌', text: `Lung ${lungDose.toFixed(1)} Gy (Korean<15)`, ref:'KLCA' });
+  } else {
+    items.push({ icon: tumorDose>=400?'✅':tumorDose>=250?'⚠️':tumorDose>=205?'⚠️':'❌', text: `Tumor ${tumorDose?.toFixed(1)||'—'} Gy (RS≥400, Lob≥205)`, ref:'LEGACY / DOSISPHERE-01' });
+    if(ntad!=null) items.push({ icon: ntad<=75?'✅':ntad<=120?'⚠️':'❌', text: `NTAD ${ntad.toFixed(1)} Gy (safe<75, Lob<120)`, ref:'2025 EJNMMI / 2022 Consensus' });
+    if(wlNtad!=null) items.push({ icon: wlNtad<=52?'✅':'⚠️', text: `WL NTAD ${wlNtad.toFixed(1)} Gy`, ref:'Strigari 2010' });
+    if(lungDose!=null) items.push({ icon: lungDose<=25?'✅':lungDose<=30?'⚠️':'❌', text: `Lung ${lungDose.toFixed(1)} Gy (Korean M<25)`, ref:'KLCA' });
   }
+  if(lsf!=null) items.push({ icon: lsf<=10?'✅':lsf<=20?'⚠️':'❌', text: `LSF ${lsf.toFixed(1)}%`, ref:'' });
+  return items;
+}
 
-  // Normal tissue
-  const ntadSafe = micro === 'resin' ? 40 : 75;
-  items.push({
-    icon: result.normalDose <= ntadSafe ? '✅' : result.normalDose <= 52 ? '⚠️' : '❌',
-    text: `Perfused NTAD ${result.normalDose} Gy (safe <${ntadSafe} Gy, TD50 52 Gy)`,
-    ref: micro === 'resin' ? 'Strigari 2010' : '2025 EJNMMI Expert',
-    status: result.normalDose <= ntadSafe ? 'safe' : result.normalDose <= 52 ? 'warn' : 'danger'
-  });
+function renderSafety(containerId, items) {
+  const el = document.getElementById(containerId);
+  if (!el || !items.length) { if(el) el.innerHTML=''; return; }
+  el.innerHTML = `<h3>안전성 평가</h3>${items.map(s=>`<div class="safety-item"><span class="safety-icon">${s.icon}</span><div><div class="safety-text">${s.text}</div>${s.ref?`<div class="safety-ref">${s.ref}</div>`:''}</div></div>`).join('')}`;
+}
+
+function renderCases(containerId, micro) {
+  const el = document.getElementById(containerId);
+  if (!el || !REFS.cases) { if(el) el.innerHTML=''; return; }
+  const m = micro==='resin'?'Resin':'Glass';
+  const cases = REFS.cases.filter(c=>!c.Microsphere||c.Microsphere===m||c.Microsphere==='Both'||c.Microsphere==='?'||c.Microsphere==='N/A').slice(0,3);
+  if (!cases.length) { el.innerHTML=''; return; }
+  el.innerHTML = `<h3>⚠️ 유사 사례 주의</h3>${cases.map(c=>`<div class="warning-card"><div class="ref-title">${c.Title||''}</div><div class="ref-meta">${c.PMID?'PMID '+c.PMID+' | ':''}${c.Year||''} ${c.Journal||''}</div><div class="ref-finding">${c.Complication||''}</div></div>`).join('')}`;
+}
+
+// ====== PARTITION TAB — Real-time calc ======
+function calcPartitionAll() {
+  const micro = tabMicro.partition;
+  const V = parseFloat(document.getElementById('p_liverVol').value) || 0;
+  const Vt = parseFloat(document.getElementById('p_tumorVol').value) || 0;
+  const Vw = parseFloat(document.getElementById('p_wholeVol').value) || 0;
+  const TN = parseFloat(document.getElementById('p_tn').value) || 0;
+  const LSF = parseFloat(document.getElementById('p_lsf').value) || 0;
+  const Lm = parseFloat(document.getElementById('p_lungMass').value) || 800;
+  const Vn = V - Vt;
+
+  if (!V || !Vt || !TN || LSF<0) return;
+
+  // ① Desired tumor dose
+  const Dt = parseFloat(document.getElementById('p_desiredDose').value) || 0;
+  const Dn1 = Dt / TN;
+  const Dp1 = (Vt*Dt + Vn*Dn1) / V;
+  const A1 = (Dp1 * V) / (C * (1 - LSF/100));
+  const Dl1 = (A1 * C * (LSF/100)) / Lm;
+  set('p_r1_normal', Dn1.toFixed(1)+' Gy', Dn1<=40?'safe':Dn1<=52?'warn':'danger');
+  set('p_r1_lung', Dl1.toFixed(2)+' Gy', Dl1<=(micro==='resin'?15:25)?'safe':'warn');
+  set('p_r1_activity', A1.toFixed(3)+' GBq', 'highlight');
+
+  // ② Liver limiting
+  const LL = parseFloat(document.getElementById('p_liverLimit').value) || 70;
+  const Dt2 = LL * TN;
+  const Dp2 = (Vt*Dt2 + Vn*LL) / V;
+  const A2 = (Dp2 * V) / (C * (1 - LSF/100));
+  const Dl2 = (A2 * C * (LSF/100)) / Lm;
+  set('p_r2_tumor', Dt2.toFixed(1)+' Gy');
+  set('p_r2_lung', Dl2.toFixed(2)+' Gy');
+  set('p_r2_activity', A2.toFixed(3)+' GBq');
+
+  // ③ Lung limiting
+  const LungL = parseFloat(document.getElementById('p_lungLimit').value) || 25;
+  const A3 = (LungL * Lm) / (C * (LSF/100));
+  const Dp3 = (A3 * C * (1-LSF/100)) / V;
+  const Dt3 = Dp3 * TN * V / (TN*Vt + Vn);
+  const Dn3 = Dt3 / TN;
+  set('p_r3_normal', Dn3.toFixed(1)+' Gy');
+  set('p_r3_tumor', Dt3.toFixed(1)+' Gy');
+  set('p_r3_activity', A3.toFixed(3)+' GBq');
+
+  // ④ Prescribed activity
+  const A4 = parseFloat(document.getElementById('p_prescribedA').value) || 0;
+  if (A4 > 0) {
+    const Dp4 = (A4 * C * (1-LSF/100)) / V;
+    const Dt4 = Dp4 * TN * V / (TN*Vt + Vn);
+    const Dn4 = Dt4 / TN;
+    const Dl4 = (A4 * C * (LSF/100)) / Lm;
+    set('p_r4_tumor', Dt4.toFixed(1)+' Gy');
+    set('p_r4_normal', Dn4.toFixed(1)+' Gy');
+    set('p_r4_lung', Dl4.toFixed(2)+' Gy');
+  }
 
   // WL NTAD
-  if (result.wlNtad !== null) {
-    items.push({
-      icon: result.wlNtad <= 40 ? '✅' : result.wlNtad <= 52 ? '⚠️' : '❌',
-      text: `WL NTAD ${result.wlNtad} Gy (safe <40 Gy, TD50 52 Gy)`,
-      ref: 'Strigari 2010',
-      status: result.wlNtad <= 40 ? 'safe' : result.wlNtad <= 52 ? 'warn' : 'danger'
-    });
+  let wlNtad = null;
+  if (Vw > 0) {
+    const totalNormal = Vw - Vt;
+    wlNtad = (Vn * Dn1) / totalNormal;
   }
 
-  // Lung dose
-  const lungLimit = micro === 'resin' ? 15 : 25;
-  items.push({
-    icon: result.lungDose <= lungLimit ? '✅' : result.lungDose <= 30 ? '⚠️' : '❌',
-    text: `Lung dose ${result.lungDose} Gy (Korean <${lungLimit} Gy)`,
-    ref: 'Korean guideline',
-    status: result.lungDose <= lungLimit ? 'safe' : result.lungDose <= 30 ? 'warn' : 'danger'
-  });
-
-  // LSF
-  items.push({
-    icon: input.lsf <= 10 ? '✅' : input.lsf <= 20 ? '⚠️' : '❌',
-    text: `LSF ${input.lsf}% (safe <10%, caution 10-20%)`,
-    ref: '',
-    status: input.lsf <= 10 ? 'safe' : input.lsf <= 20 ? 'warn' : 'danger'
-  });
-
-  return { items, scenario };
+  // Safety
+  const safety = evalSafety(micro, Dt, Dn1, wlNtad, Dl1, LSF);
+  renderSafety('partitionSafety', safety);
+  renderCases('partitionCases', micro);
 }
 
-// ====== Find Similar Cases ======
-function findSimilarCases(input, result) {
-  const micro = input.microsphere === 'resin' ? 'Resin' : 'Glass';
-  return REFS.cases.filter(c => {
-    const matchMicro = !c.Microsphere || c.Microsphere === '?' || c.Microsphere === micro || c.Microsphere === 'Both' || c.Microsphere === 'N/A';
-    return matchMicro;
-  }).slice(0, 5);
-}
-
-// ====== Generate Report Text ======
-function generateReport(input, result, safety) {
-  const lines = [];
-  lines.push(`═══ Y-90 Dosimetry Plan ═══`);
-  lines.push(`Microsphere: ${input.microsphere === 'resin' ? 'Resin (SIR-Spheres)' : 'Glass (TheraSphere)'}`);
-  lines.push(`Child-Pugh: ${input.childPugh} | Intent: ${input.intent}`);
-  lines.push(`Scenario: ${safety.scenario}`);
-  lines.push('');
-  lines.push(`[입력]`);
-  lines.push(`Perfused: ${input.perfusedVol} mL | Tumor: ${input.tumorVol} mL`);
-  lines.push(`T/N: ${input.tnRatio} | LSF: ${input.lsf}%`);
-  if (input.wholeVol) lines.push(`Whole liver: ${input.wholeVol} mL | Perfused fraction: ${result.perfusedFraction}%`);
-  lines.push('');
-  lines.push(`[Partition Model]`);
-  lines.push(`Activity: ${result.activity} GBq`);
-  lines.push(`Tumor AD: ${result.tumorDose} Gy | NTAD: ${result.normalDose} Gy`);
-  lines.push(`Perfused AD: ${result.perfusedDose} Gy`);
-  if (result.wlNtad !== null) lines.push(`WL NTAD: ${result.wlNtad} Gy`);
-  lines.push(`Lung AD: ${result.lungDose} Gy`);
-  lines.push('');
-  lines.push(`[MIRD (Single Compartment)]`);
-  const mirdData = calcMIRD(input);
-  lines.push(`Activity: ${mirdData.activity} GBq`);
-  lines.push(`Tumor AD: ${mirdData.tumorDose} Gy | NTAD: ${mirdData.normalDose} Gy`);
-  lines.push(`Perfused AD: ${mirdData.perfusedDose} Gy`);
-  if (mirdData.wlNtad !== null) lines.push(`WL NTAD: ${mirdData.wlNtad} Gy`);
-  lines.push(`Lung AD: ${mirdData.lungDose} Gy`);
-  lines.push('');
-  lines.push(`[안전성 평가]`);
-  safety.items.forEach(s => lines.push(`${s.icon} ${s.text}`));
-  return lines.join('\n');
-}
-
-// ====== Render Results ======
-function renderResults(input, result, mird, safety) {
-  const container = document.getElementById('resultContainer');
-  const cases = findSimilarCases(input, result);
-
-  let html = `
-    <div class="card">
-      <span class="scenario-badge">${safety.scenario}</span>
-
-      <div class="model-compare">
-        <div class="model-col">
-          <div class="model-header partition-header">Partition Model</div>
-          <div class="model-value-big">${result.activity} <span class="model-unit">GBq</span></div>
-          <div class="model-rows">
-            <div class="result-row"><span class="result-label">Tumor AD</span><span class="result-value">${result.tumorDose} Gy</span></div>
-            <div class="result-row"><span class="result-label">NTAD</span><span class="result-value ${result.normalDose<=40?'safe':result.normalDose<=52?'warn':'danger'}">${result.normalDose} Gy</span></div>
-            <div class="result-row"><span class="result-label">Perfused AD</span><span class="result-value">${result.perfusedDose} Gy</span></div>
-            ${result.wlNtad!==null ? `<div class="result-row"><span class="result-label">WL NTAD</span><span class="result-value ${result.wlNtad<=40?'safe':result.wlNtad<=52?'warn':'danger'}">${result.wlNtad} Gy</span></div>` : ''}
-            <div class="result-row"><span class="result-label">Lung AD</span><span class="result-value ${result.lungDose<=15?'safe':result.lungDose<=30?'warn':'danger'}">${result.lungDose} Gy</span></div>
-          </div>
-        </div>
-        <div class="model-col">
-          <div class="model-header mird-header">MIRD (Single Compartment)</div>
-          <div class="model-value-big">${mird.activity} <span class="model-unit">GBq</span></div>
-          <div class="model-rows">
-            <div class="result-row"><span class="result-label">Tumor AD</span><span class="result-value">${mird.tumorDose} Gy</span></div>
-            <div class="result-row"><span class="result-label">NTAD</span><span class="result-value ${mird.normalDose<=40?'safe':mird.normalDose<=52?'warn':'danger'}">${mird.normalDose} Gy</span></div>
-            <div class="result-row"><span class="result-label">Perfused AD</span><span class="result-value">${mird.perfusedDose} Gy</span></div>
-            ${mird.wlNtad!==null ? `<div class="result-row"><span class="result-label">WL NTAD</span><span class="result-value ${mird.wlNtad<=40?'safe':mird.wlNtad<=52?'warn':'danger'}">${mird.wlNtad} Gy</span></div>` : ''}
-            <div class="result-row"><span class="result-label">Lung AD</span><span class="result-value ${mird.lungDose<=15?'safe':mird.lungDose<=30?'warn':'danger'}">${mird.lungDose} Gy</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="model-note">※ Partition = multi-compartment (T/N ratio 반영, Simplicity personalized dosimetry와 동일). MIRD = single compartment (보수적).</div>
-    </div>
-
-    <div class="card">
-      <div class="result-section">
-        <h3>4단계 계산 (Partition Model)</h3>
-        <div style="font-size:12px">
-          <div class="result-row" style="background:rgba(0,180,216,0.05);padding:8px;border-radius:6px;margin-bottom:4px">
-            <span class="result-label"><strong>① Desired Tumor Dose ${result.tumorDose} Gy</strong></span>
-            <span class="result-value">A = ${result.activity} GBq | NTAD ${result.normalDose} Gy | Lung ${result.lungDose} Gy</span>
-          </div>
-          <div class="result-row" style="padding:8px;margin-bottom:4px">
-            <span class="result-label"><strong>② Liver Limiting (NTAD ${input.microsphere==='resin'?70:120} Gy)</strong></span>
-            <span class="result-value">Tumor ${result.liverLimitTumorDose} Gy</span>
-          </div>
-          <div class="result-row" style="padding:8px;margin-bottom:4px">
-            <span class="result-label"><strong>③ Lung Limiting (${input.microsphere==='resin'?15:25} Gy)</strong></span>
-            <span class="result-value">A = ${((input.microsphere==='resin'?15:25) * (input.lungMass||1000) / (49670 * (input.lsf/100))).toFixed(2)} GBq</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="result-section" style="margin-top:12px">
-        ${result.perfusedFraction!==null ? `<div class="result-row"><span class="result-label">Perfused Fraction</span><span class="result-value">${result.perfusedFraction}%</span></div>` : ''}
-        <div class="result-row"><span class="result-label">Liver Limiting Tumor Dose</span><span class="result-value">${result.liverLimitTumorDose} Gy</span></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="result-section">
-        <h3>안전성 평가</h3>
-        ${safety.items.map(s=>`
-          <div class="safety-item">
-            <span class="safety-icon">${s.icon}</span>
-            <div>
-              <div class="safety-text">${s.text}</div>
-              ${s.ref ? `<div class="safety-ref">${s.ref}</div>` : ''}
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `;
-
-  // Similar cases warnings
-  if (cases.length > 0) {
-    html += `<div class="card"><div class="result-section"><h3>⚠️ 유사 사례 부작용 주의</h3>`;
-    cases.forEach(c => {
-      html += `
-        <div class="warning-card">
-          <div class="ref-title">${c.Title || ''}</div>
-          <div class="ref-meta">${c.PMID ? 'PMID '+c.PMID+' | ' : ''}${c.Year || ''} ${c.Journal || ''}</div>
-          <div class="ref-finding">${c.Complication || c['Key Finding'] || ''}</div>
-          <div class="ref-meta">결과: ${c.Outcome || ''}</div>
-        </div>
-      `;
-    });
-    html += `</div></div>`;
+// MAA auto-calc
+function calcMAA() {
+  const lung = parseFloat(document.getElementById('p_maaLung').value) || 0;
+  const liver = parseFloat(document.getElementById('p_maaLiver').value) || 0;
+  const tumor = parseFloat(document.getElementById('p_maaTumor').value) || 0;
+  const Vt = parseFloat(document.getElementById('p_tumorVol').value) || 0;
+  const V = parseFloat(document.getElementById('p_liverVol').value) || 0;
+  if (lung>0 && liver>0 && tumor>0 && Vt>0 && V>0) {
+    const normalCounts = liver - tumor;
+    const Vn = V - Vt;
+    const tn = (tumor/Vt) / (normalCounts/Vn);
+    const lsf = (lung / (lung + liver)) * 100;
+    document.getElementById('p_tn').value = tn.toFixed(2);
+    document.getElementById('p_lsf').value = lsf.toFixed(2);
+    set('p_maaTN', tn.toFixed(2));
+    set('p_maaLSF', lsf.toFixed(2)+'%');
+    calcPartitionAll();
   }
-
-  container.innerHTML = html;
 }
 
-// ====== Render References ======
+// ====== MIRD TAB — Real-time calc + Time Table ======
+function calcMIRDAll() {
+  const micro = tabMicro.mird;
+  const Vt = parseFloat(document.getElementById('m_targetVol').value) || 0;
+  const Dd = parseFloat(document.getElementById('m_desiredDose').value) || 0;
+  const LSF = parseFloat(document.getElementById('m_lsf').value) || 0;
+  const res = parseFloat(document.getElementById('m_residual').value) || 0;
+  const Lm = parseFloat(document.getElementById('m_lungMass').value) || 1000;
+  const prevLung = parseFloat(document.getElementById('m_prevLung').value) || 0;
+
+  if (!Vt || !Dd) return;
+
+  const mass = Vt * 1.03 / 1000; // kg
+  const A = (Dd * mass) / (49.67 * (1-LSF/100) * (1-res/100));
+  const lungD = (A * 49.67 * (LSF/100)) / (Lm/1000);
+  const cumLung = lungD + prevLung;
+  const lungLimit = micro==='glass'?30:15;
+
+  set('m_mass', mass.toFixed(4)+' kg');
+  set('m_activity', A.toFixed(3)+' GBq', 'highlight');
+  set('m_lungDose', lungD.toFixed(2)+' Gy', lungD<=lungLimit?'safe':'danger');
+  set('m_cumLung', cumLung.toFixed(2)+' Gy', cumLung<=50?'safe':'danger');
+  set('m_lungStatus', lungD<=lungLimit?'✅ Within limit':'❌ Exceeds limit');
+
+  // Time table
+  buildTimeTable(A, Vt, LSF, res, Lm, Dd);
+
+  const safety = evalSafety(micro, Dd, null, null, lungD, LSF);
+  renderSafety('mirdSafety', safety);
+  renderCases('mirdCases', micro);
+}
+
+function buildTimeTable(reqA, vol, lsf, res, lungMass, desiredDose) {
+  const el = document.getElementById('mirdTimeTable');
+  if (!el) return;
+  const mass = vol * 1.03 / 1000;
+  const hl = 64.1;
+  const lambda = Math.log(2) / hl;
+  const tzOff = 14; // Korea
+
+  const sizes = [3,5,7,10,12,15,20];
+  const closest = sizes.reduce((a,b)=>Math.abs(b-reqA)<Math.abs(a-reqA)?b:a);
+  const show = sizes.filter(s=>Math.abs(sizes.indexOf(s)-sizes.indexOf(closest))<=1);
+
+  const days = ['Sun(Cal)','Mon','Tue','Wed','Thu','Fri','Sat','Sun','Mon','Tue'];
+  const times = ['08:00','12:00','16:00','20:00'];
+
+  let html = '';
+  for (const sz of show) {
+    html += `<div style="font-size:11px;font-weight:700;color:var(--accent);margin:8px 0 4px">${sz} GBq${sz===closest?' ← closest':''}</div>`;
+    html += `<table class="time-table"><tr><th>Time</th>`;
+    days.forEach(d=>html+=`<th>${d}</th>`);
+    html += '</tr>';
+    for (const t of times) {
+      html += `<tr><td class="row-header">${t}</td>`;
+      const [h] = t.split(':').map(Number);
+      for (let di=0; di<days.length; di++) {
+        if (di===0) { html+='<td style="color:var(--dim)">Cal</td>'; continue; }
+        const hrs = di*24 + (h-12) + tzOff;
+        if (hrs<=0) { html+='<td>-</td>'; continue; }
+        const decA = sz * Math.exp(-lambda*hrs);
+        const dose = (decA * 49.67 * (1-lsf/100) * (1-res/100)) / mass;
+        const cls = Math.abs(dose-desiredDose)<desiredDose*0.15?'highlight':'';
+        html += `<td class="${cls}">${dose.toFixed(0)}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</table>';
+  }
+  el.innerHTML = html;
+}
+
+// ====== SIMPLICITY TAB — Evaluate inputs ======
+function calcSimplicityAll() {
+  const micro = tabMicro.simplicity;
+  const td = parseFloat(document.getElementById('s_tumorDose').value);
+  const ntad = parseFloat(document.getElementById('s_ntad').value);
+  const wlNtad = parseFloat(document.getElementById('s_wlNtad').value);
+  const ld = parseFloat(document.getElementById('s_lungDose').value);
+  const pf = parseFloat(document.getElementById('s_perfFrac').value);
+
+  const safety = evalSafety(micro, td||0, isNaN(ntad)?null:ntad, isNaN(wlNtad)?null:wlNtad, isNaN(ld)?null:ld, null);
+  renderSafety('simplicitySafety', safety);
+  renderCases('simplicityCases', micro);
+}
+
+// ====== Helpers ======
+function set(id, val, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = val;
+  el.className = 'sheet-auto' + (cls ? ' '+cls : '');
+}
+
+// ====== References Tab ======
 function renderRefs() {
   const container = document.getElementById('refsList');
   if (!container) return;
-  const search = (document.getElementById('refSearch')?.value || '').toLowerCase();
-  const filter = document.getElementById('refFilter')?.value || 'all';
-  const micro = document.getElementById('refMicro')?.value || 'all';
+  const search = (document.getElementById('refSearch')?.value||'').toLowerCase();
+  const filter = document.getElementById('refFilter')?.value||'all';
+  const micro = document.getElementById('refMicro')?.value||'all';
 
   let items = [];
-  if (filter === 'all' || filter === 'threshold') {
-    REFS.thresholds.forEach(r => items.push({...r, _type: 'threshold'}));
-  }
-  if (filter === 'all' || filter === 'case') {
-    REFS.cases.forEach(r => items.push({...r, _type: 'case'}));
-  }
+  if (filter==='all'||filter==='threshold') REFS.thresholds.forEach(r=>items.push({...r,_type:'threshold'}));
+  if (filter==='all'||filter==='case') REFS.cases.forEach(r=>items.push({...r,_type:'case'}));
+  if (micro!=='all') items = items.filter(r=>(r.Microsphere||'')=== micro||(r.Microsphere||'')==='Both'||!r.Microsphere);
+  if (search) items = items.filter(r=>JSON.stringify(r).toLowerCase().includes(search));
 
-  if (micro !== 'all') {
-    items = items.filter(r => {
-      const m = r.Microsphere || r.microsphere || '';
-      return m === micro || m === 'Both' || m === '';
-    });
-  }
-
-  if (search) {
-    items = items.filter(r => {
-      const text = JSON.stringify(r).toLowerCase();
-      return text.includes(search);
-    });
-  }
-
-  container.innerHTML = items.length === 0 ? '<div class="empty-state">검색 결과 없음</div>' :
-    items.map(r => {
-      const isCase = r._type === 'case';
-      const title = r.Title || r.title || '';
-      const pmid = r.PMID || r.pmid || '';
-      const year = r.Year || r.year || '';
-      const journal = r.Journal || r.journal || '';
-      const finding = r['Key Finding'] || r.Complication || r['key_finding'] || '';
-      const msphere = r.Microsphere || r.microsphere || '';
-
-      return `
-        <div class="${isCase ? 'warning-card' : 'ref-card'}">
-          <div class="ref-title">${title}</div>
-          <div class="ref-meta">${pmid ? 'PMID '+pmid+' | ' : ''}${year} ${journal}</div>
-          <div class="ref-finding">${finding}</div>
-          <div class="ref-tags">
-            <span class="ref-tag ${isCase?'case':''}">${isCase?'Case/Complication':'Threshold'}</span>
-            ${msphere ? `<span class="ref-tag">${msphere}</span>` : ''}
-          </div>
-        </div>
-      `;
-    }).join('');
+  container.innerHTML = items.length===0?'<div class="empty-state">검색 결과 없음</div>':items.map(r=>{
+    const isCase = r._type==='case';
+    return `<div class="${isCase?'warning-card':'ref-card'}"><div class="ref-title">${r.Title||''}</div><div class="ref-meta">${r.PMID?'PMID '+r.PMID+' | ':''}${r.Year||''} ${r.Journal||''}</div><div class="ref-finding">${r['Key Finding']||r.Complication||''}</div><div class="ref-tags"><span class="ref-tag ${isCase?'case':''}">${isCase?'Case':'Threshold'}</span>${r.Microsphere?`<span class="ref-tag">${r.Microsphere}</span>`:''}</div></div>`;
+  }).join('');
 }
 
-// ====== Event Listeners ======
+// ====== Init ======
 function init() {
-  // Tabs
-  document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  // Main tabs
+  document.querySelectorAll('.tabs .tab').forEach(tab=>{
+    tab.addEventListener('click',()=>{
+      document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
-      if (tab.dataset.tab === 'refs') renderRefs();
+      if(tab.dataset.tab==='refs') renderRefs();
     });
   });
 
-  // Dose slider
-  const slider = document.getElementById('targetDoseSlider');
-  const doseVal = document.getElementById('targetDoseValue');
-  slider.addEventListener('input', () => {
-    doseVal.textContent = slider.value;
-    document.querySelectorAll('.quick-dose').forEach(b => b.classList.toggle('active', b.dataset.dose === slider.value));
-  });
-
-  // Quick dose buttons
-  document.querySelectorAll('.quick-dose').forEach(btn => {
-    btn.addEventListener('click', () => {
-      slider.value = btn.dataset.dose;
-      doseVal.textContent = btn.dataset.dose;
-      document.querySelectorAll('.quick-dose').forEach(b => b.classList.remove('active'));
+  // Micro toggles per tab
+  document.querySelectorAll('.micro-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const parent = btn.dataset.parent;
+      document.querySelectorAll(`.micro-btn[data-parent="${parent}"]`).forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
+      tabMicro[parent] = btn.dataset.micro;
+      renderGuide(parent+'Guide', btn.dataset.micro);
+      if(parent==='partition') { document.getElementById('p_liverLimit').value=btn.dataset.micro==='resin'?70:120; document.getElementById('p_lungLimit').value=btn.dataset.micro==='resin'?15:25; calcPartitionAll(); }
+      if(parent==='mird') calcMIRDAll();
+      if(parent==='simplicity') calcSimplicityAll();
     });
   });
 
-  // Scenario-specific dose guides
-  // PPT 기반 시나리오별 dose guides
-  const DOSE_GUIDES = {
-    resin: {
-      segmentectomy: [
-        ['Tumor dose (min)', '>250 Gy', 'NCT04172714 (Partition/Voxel dosimetry)'],
-        ['Tumor dose (optimal)', '≥300 Gy', 'Hermann 2024, Radiology'],
-        ['Model', 'Single compartment (MIRD) enough', 'Salem 2021, Semin Nucl Med'],
-        ['Curative intent', 'Late 1st week or early 2nd week', 'Vouche 2023, JVIR'],
-        ['Lung', '<15 Gy/session', 'Korean Liver Cancer Assoc Guideline'],
-      ],
-      lobectomy: [
-        ['Tumor dose (Partition)', '>250 Gy', 'NCT04172714'],
-        ['Tumor dose (MIRD)', '>100 Gy', 'Hermann 2020, Radiology (SARAH sub-analysis)'],
-        ['Perfused NTAD', '~70 Gy', 'Strigari 2010, J Nucl Med (TD50 52Gy 기반)'],
-        ['용도', 'Bridging to LT / Neoadjuvant', 'Lewandowski 2009, JVIR'],
-        ['Lung', '<15 Gy/session', 'Korean Liver Cancer Assoc Guideline'],
-      ],
-      largeHCC: [
-        ['Tumor dose', '>100~157 Gy', 'Hermann 2020, Radiology / Doyle 2019'],
-        ['STRATUM threshold', '150 Gy', 'STRATUM trial (NCT03000439)'],
-        ['Normal tissue AD', '<40~70 Gy', 'Strigari 2010, J Nucl Med'],
-        ['WL NTAD safe', '<40 Gy (TD50 52Gy)', 'Strigari 2010, J Nucl Med'],
-        ['Lung', '<15 Gy/session', 'Korean Liver Cancer Assoc Guideline'],
-      ],
-      unilobar: [
-        ['Tumor dose', '>250 Gy', 'NCT04172714'],
-        ['Normal tissue AD', '40~70 Gy', 'Strigari 2010 / CIRT Study (JHEP Rep 2023)'],
-        ['MIRD model', '150 Gy 이상 목표', 'STRATUM trial (NCT03000439)'],
-        ['비종양선량에 초점', '', 'Chiesa 2015, Eur J Nucl Med Mol Imaging'],
-        ['Lung', '<15 Gy/session', 'Korean Liver Cancer Assoc Guideline'],
-      ],
-      bilobar: [
-        ['Tumor dose', '>100 Gy', 'Hermann 2020, Radiology (SARAH)'],
-        ['Normal tissue AD', '<40 Gy', 'Strigari 2010, J Nucl Med'],
-        ['Lung', '<15 Gy/session', 'Korean Liver Cancer Assoc Guideline'],
-      ],
-      pvt: [
-        ['Tumor dose', '>100 Gy', 'Hermann 2020, Radiology (SARAH)'],
-        ['NTAD CPS A', '>70 Gy', 'Strigari 2010 / CIRT Study (JHEP Rep 2023)'],
-        ['NTAD CPS B', '40~70 Gy', 'Strigari 2010, J Nucl Med'],
-        ['Lung', '<15 Gy/session', 'Korean Liver Cancer Assoc Guideline'],
-      ],
-    },
-    glass: {
-      segmentectomy: [
-        ['Perfused dose', '≥400 Gy', 'Salem 2021, J Hepatol (LEGACY)'],
-        ['Complete necrosis', '400 Gy (perfused)', 'Salem 2021, J Hepatol (LEGACY)'],
-        ['Model', 'Single compartment (MIRD) enough', 'Salem 2021, Semin Nucl Med'],
-        ['Curative intent', 'Late 1st week or early 2nd week', 'Vouche 2023, JVIR'],
-        ['Lung (M/F)', '<25/<20 Gy', 'Korean Liver Cancer Assoc Guideline'],
-      ],
-      lobectomy: [
-        ['Tumor dose (Partition)', '>205 Gy, ideally >250 Gy', 'Garin 2021, Lancet Gastro (DOSISPHERE-01)'],
-        ['Tumor dose (MIRD)', '>150 Gy', 'Garin 2021, Lancet Gastro (DOSISPHERE-01)'],
-        ['NTAD', '<120 Gy', '2022 EJNMMI Consensus'],
-        ['Perfused NTAD', '88 Gy', 'Garin 2017, J Nucl Med'],
-        ['용도', 'Bridging to LT', 'Lewandowski 2009, JVIR'],
-        ['Lung (M/F)', '<25/<20 Gy', 'Korean Liver Cancer Assoc Guideline'],
-      ],
-      largeHCC: [
-        ['Tumor dose', '>205 Gy (preferably 250 Gy)', 'Garin 2021, Lancet Gastro (DOSISPHERE-01)'],
-        ['Normal tissue AD', '<120 Gy', '2022 EJNMMI Consensus'],
-        ['Hepatic reserve', '>30% 필요', '2022 EJNMMI Consensus'],
-        ['Normal tissue AD (wide)', '<40~70 Gy', 'Strigari 2010, J Nucl Med'],
-        ['Radiation major hepatectomy', 'Perfused AD >200, lung limiting, split ≥4wk', 'Gabr 2021, Eur J Nucl Med Mol Imaging'],
-        ['Lung (M/F)', '<25/<20 Gy', 'Korean Liver Cancer Assoc Guideline'],
-      ],
-      unilobar: [
-        ['Tumor dose', '>205 Gy (ideally 250 Gy)', 'Garin 2021, Lancet Gastro (DOSISPHERE-01)'],
-        ['Normal tissue AD CPS A', '<100 Gy', '2022 EJNMMI Consensus'],
-        ['Normal tissue AD CPS B', '<70 Gy', '2022 EJNMMI Consensus'],
-        ['MIRD model', '150 Gy 이상 목표', 'Garin 2017, J Nucl Med'],
-        ['Lung (M/F)', '<25/<20 Gy', 'Korean Liver Cancer Assoc Guideline'],
-      ],
-      bilobar: [
-        ['Tumor dose', '>205 Gy (ideally 250 Gy)', 'Garin 2021, Lancet Gastro (DOSISPHERE-01)'],
-        ['Normal tissue AD CPS A', '40~70 Gy', '2022 EJNMMI Consensus'],
-        ['Lung (M/F)', '<25/<20 Gy', 'Korean Liver Cancer Assoc Guideline'],
-      ],
-      pvt: [
-        ['Tumor dose', '>205 Gy (ideally 250 Gy)', 'Garin 2021, Lancet Gastro (DOSISPHERE-01)'],
-        ['NTAD', '<120 Gy', '2022 EJNMMI Consensus'],
-        ['NTAD CPS B', '<70 Gy', '2022 EJNMMI Consensus'],
-        ['Lung (M/F)', '<25/<20 Gy', 'Korean Liver Cancer Assoc Guideline'],
-      ],
-    }
-  };
-
-  let currentScenario = 'segmentectomy';
-
-  function updateDoseGuide() {
-    const micro = document.getElementById('microsphere').value;
-    const el = document.getElementById('doseGuideContent');
-    if (!el) return;
-    const guides = DOSE_GUIDES[micro]?.[currentScenario] || [];
-
-    el.innerHTML = guides.map(g => `
-      <div class="dose-guide-row">
-        <span class="dose-guide-scenario">${g[0]}</span>
-        <span class="dose-guide-dose">${g[1]}</span>
-      </div>
-      ${g[2] ? `<div style="font-size:10px;color:var(--dim);padding:0 0 4px 8px">${g[2]}</div>` : ''}
-    `).join('');
-
-    // Auto-set recommended dose on slider
-    const slider = document.getElementById('targetDoseSlider');
-    const doseVal = document.getElementById('targetDoseValue');
-    const recommended = {
-      resin: { segmentectomy: 300, lobectomy: 250, largeHCC: 150, unilobar: 250, bilobar: 150, pvt: 150 },
-      glass: { segmentectomy: 400, lobectomy: 250, largeHCC: 250, unilobar: 250, bilobar: 250, pvt: 250 },
-    };
-    const rec = recommended[micro]?.[currentScenario] || 250;
-    slider.value = rec;
-    doseVal.textContent = rec;
-    document.querySelectorAll('.quick-dose').forEach(b => b.classList.toggle('active', parseInt(b.dataset.dose) === rec));
-  }
-
-  // ====== MAA Counts Toggle & Calculation ======
-  document.querySelectorAll('.maa-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.maa-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById('directInput').style.display = btn.dataset.mode === 'direct' ? 'grid' : 'none';
-      document.getElementById('maaInput').style.display = btn.dataset.mode === 'maa' ? 'block' : 'none';
-    });
-  });
-
-  ['maaLung','maaLiver','maaTumor'].forEach(id => {
+  // Partition inputs — live calc
+  ['p_liverVol','p_tumorVol','p_wholeVol','p_tn','p_lsf','p_lungMass','p_desiredDose','p_liverLimit','p_lungLimit','p_prescribedA'].forEach(id=>{
     const el = document.getElementById(id);
-    if (el) el.addEventListener('input', () => {
-      const lung = parseFloat(document.getElementById('maaLung').value) || 0;
-      const liver = parseFloat(document.getElementById('maaLiver').value) || 0;
-      const tumor = parseFloat(document.getElementById('maaTumor').value) || 0;
-      if (lung > 0 && liver > 0 && tumor > 0) {
-        const normalLiver = liver - tumor;
-        const lsf = lung / (lung + liver) * 100;
-        const tnRatioCalc = (tumor / parseFloat(document.getElementById('tumorVol').value || 1)) / (normalLiver / (parseFloat(document.getElementById('perfusedVol').value || 1) - parseFloat(document.getElementById('tumorVol').value || 1)));
-        document.getElementById('tnRatio').value = tnRatioCalc.toFixed(2);
-        document.getElementById('lsf').value = lsf.toFixed(2);
-        document.getElementById('maaResult').innerHTML = `T/N Ratio: <strong>${tnRatioCalc.toFixed(2)}</strong> | LSF: <strong>${lsf.toFixed(2)}%</strong> | Normal liver counts: ${normalLiver.toFixed(0)}`;
-      }
-    });
+    if(el) el.addEventListener('input', calcPartitionAll);
   });
-
-  // ====== Glass MIRD Time Table ======
-  function calcGlassTimeTable() {
-    const el = document.getElementById('glassTimeTable');
-    if (!el) return;
-    const targetVol = parseFloat(document.getElementById('perfusedVol').value) || 0;
-    const desiredDose = parseInt(document.getElementById('targetDoseSlider').value) || 150;
-    const lsf = parseFloat(document.getElementById('lsf').value) || 0;
-    const residual = parseFloat(document.getElementById('residualWaste').value) || 1;
-    const prevLung = parseFloat(document.getElementById('prevLungDose').value) || 0;
-    const lungMass = parseFloat(document.getElementById('lungMass').value) || 1000;
-
-    if (targetVol <= 0) { el.innerHTML = '<div class="empty-state">Perfused Volume을 입력하세요</div>'; return; }
-
-    const targetMassKg = targetVol * 1.03 / 1000; // liver density ~1.03 g/mL
-    const halfLife = 64.1; // hours
-    const lambda = Math.log(2) / halfLife;
-
-    // Required activity at administration
-    const reqActivity = (desiredDose * targetMassKg) / (49.67 * (1 - lsf/100) * (1 - residual/100));
-
-    // Lung dose
-    const lungDoseCalc = (reqActivity * 49.67 * (lsf/100)) / (lungMass/1000);
-    const cumLung = lungDoseCalc + prevLung;
-
-    // Dose sizes to show
-    const doseSizes = [3, 5, 7, 10, 12, 15, 20];
-    // Days: Sun(calibration), Mon-Sat, Sun-Wed (week 2)
-    const days = ['Sun(Cal)', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', 'Mon', 'Tue', 'Wed'];
-    const times = ['08:00', '12:00', '16:00', '20:00'];
-    const tzOffset = 14; // Korea = +14h from Eastern
-
-    let html = `<div style="font-size:12px;margin-bottom:8px">`;
-    html += `Required Activity: <strong>${reqActivity.toFixed(2)} GBq</strong> | `;
-    html += `Lung Dose: <strong style="color:${lungDoseCalc<=30?'var(--safe)':'var(--danger)'}">${lungDoseCalc.toFixed(1)} Gy</strong>`;
-    if (prevLung > 0) html += ` (Cumulative: ${cumLung.toFixed(1)} Gy)`;
-    html += `</div>`;
-
-    // Show table for the closest dose size
-    const closestSize = doseSizes.reduce((a, b) => Math.abs(b - reqActivity) < Math.abs(a - reqActivity) ? b : a);
-    const showSizes = [closestSize];
-    if (closestSize > doseSizes[0]) showSizes.unshift(doseSizes[doseSizes.indexOf(closestSize) - 1]);
-    if (closestSize < doseSizes[doseSizes.length - 1]) showSizes.push(doseSizes[doseSizes.indexOf(closestSize) + 1]);
-
-    for (const size of showSizes) {
-      html += `<div style="font-size:11px;font-weight:700;color:var(--accent);margin:8px 0 4px">${size} GBq dose size${size === closestSize ? ' ← closest' : ''}</div>`;
-      html += `<table class="time-table"><tr><th>Time</th>`;
-      days.forEach(d => html += `<th>${d}</th>`);
-      html += `</tr>`;
-
-      for (const time of times) {
-        html += `<tr><td class="row-header">${time}</td>`;
-        const [h] = time.split(':').map(Number);
-        for (let dayIdx = 0; dayIdx < days.length; dayIdx++) {
-          if (dayIdx === 0) {
-            html += `<td style="color:var(--dim)">Cal Day</td>`;
-            continue;
-          }
-          // Hours from calibration (Sunday 12:00 Eastern)
-          const hoursFromCal = dayIdx * 24 + (h - 12) + tzOffset;
-          if (hoursFromCal <= 0) { html += `<td>-</td>`; continue; }
-          // Decayed activity
-          const decayedActivity = size * Math.exp(-lambda * hoursFromCal);
-          // Dose at this time
-          const dose = (decayedActivity * 49.67 * (1 - lsf/100) * (1 - residual/100)) / targetMassKg;
-          const isClose = Math.abs(dose - desiredDose) < desiredDose * 0.15;
-          const cls = isClose ? 'highlight' : dose > desiredDose * 1.5 ? 'warn' : '';
-          html += `<td class="${cls}">${dose.toFixed(0)}</td>`;
-        }
-        html += `</tr>`;
-      }
-      html += `</table>`;
-    }
-
-    el.innerHTML = html;
-  }
-
-  // Show/hide Glass time table
-  function updateGlassPanel() {
-    const micro = document.getElementById('microsphere').value;
-    const card = document.getElementById('glassTimeCard');
-    if (card) card.style.display = micro === 'glass' ? 'block' : 'none';
-    if (micro === 'glass') calcGlassTimeTable();
-  }
-
-  // Microsphere toggle
-  document.querySelectorAll('.micro-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.micro-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      document.getElementById('microsphere').value = btn.dataset.micro;
-      updateDoseGuide();
-      updateGlassPanel();
-    });
-  });
-
-  // Scenario tabs
-  document.querySelectorAll('.scenario-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.scenario-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-      currentScenario = tab.dataset.scenario;
-      // Auto-set intent
-      if (['segmentectomy'].includes(currentScenario)) {
-        document.getElementById('intent').value = 'curative';
-      }
-      updateDoseGuide();
-    });
-  });
-
-  updateDoseGuide();
-  updateGlassPanel();
-
-  // Recalc glass table on input changes
-  ['targetDoseSlider','perfusedVol','lsf','lungMass','residualWaste','prevLungDose'].forEach(id => {
+  ['p_maaLung','p_maaLiver','p_maaTumor'].forEach(id=>{
     const el = document.getElementById(id);
-    if (el) el.addEventListener('input', () => { if (document.getElementById('microsphere').value === 'glass') calcGlassTimeTable(); });
+    if(el) el.addEventListener('input', calcMAA);
   });
 
-  // Calculate
-  document.getElementById('calcBtn').addEventListener('click', () => {
-    const input = {
-      microsphere: document.getElementById('microsphere').value,
-      childPugh: document.getElementById('childPugh').value,
-      intent: document.getElementById('intent').value,
-      segment: document.getElementById('segment').value,
-      perfusedVol: parseFloat(document.getElementById('perfusedVol').value),
-      tumorVol: parseFloat(document.getElementById('tumorVol').value),
-      wholeVol: parseFloat(document.getElementById('wholeVol').value) || null,
-      tnRatio: parseFloat(document.getElementById('tnRatio').value),
-      lsf: parseFloat(document.getElementById('lsf').value),
-      lungMass: parseFloat(document.getElementById('lungMass').value) || 1000,
-      targetTumorDose: parseInt(slider.value),
-    };
-
-    if (!input.perfusedVol || !input.tumorVol || !input.tnRatio || !input.lsf) {
-      alert('필수 항목을 입력해주세요: Perfused Vol, Tumor Vol, T/N Ratio, LSF');
-      return;
-    }
-
-    const result = calcPartition(input);
-    const mird = calcMIRD(input);
-    const safety = evaluateSafety(input, result);
-    renderResults(input, result, mird, safety);
-
-    // Switch to result tab
-    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
-    document.querySelector('[data-tab="result"]').classList.add('active');
-    document.getElementById('tab-result').classList.add('active');
-  });
-
-  // References search
-  ['refSearch','refFilter','refMicro'].forEach(id => {
+  // MIRD inputs
+  ['m_targetVol','m_desiredDose','m_lsf','m_residual','m_lungMass','m_prevLung'].forEach(id=>{
     const el = document.getElementById(id);
-    if (el) el.addEventListener('input', renderRefs);
-    if (el) el.addEventListener('change', renderRefs);
+    if(el) el.addEventListener('input', calcMIRDAll);
   });
+
+  // Simplicity inputs
+  ['s_activity','s_tumorDose','s_perfDose','s_ntad','s_wlNtad','s_lungDose','s_perfFrac','s_perfVol','s_tumorVol','s_wholeVol'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('input', calcSimplicityAll);
+  });
+
+  // Refs
+  ['refSearch','refFilter','refMicro'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) { el.addEventListener('input',renderRefs); el.addEventListener('change',renderRefs); }
+  });
+
+  // Initial render
+  renderGuide('partitionGuide','resin');
+  renderGuide('mirdGuide','glass');
+  renderGuide('simplicityGuide','resin');
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init);
 else init();
 })();

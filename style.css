@@ -209,11 +209,33 @@ header h1 { font-size: 22px; color: var(--accent); }
   font-size:12px; color:var(--accent);
 }
 
-/* Editable cell highlight */
-.editable-cell {
-  background:rgba(0,180,216,0.08) !important;
-  border:1px dashed var(--accent) !important;
+/* Sheet (spreadsheet) style */
+.sheet-card { padding:12px; }
+.sheet { width:100%; border-collapse:collapse; }
+.sheet td { padding:6px 4px; font-size:13px; vertical-align:middle; }
+.sheet-label { color:var(--dim); white-space:nowrap; width:60%; }
+.sheet-input {
+  width:100%; padding:7px 10px;
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:6px; color:var(--text); font-size:13px;
+  text-align:right; font-family:monospace;
 }
+.sheet-input:focus { outline:none; border-color:var(--accent); background:rgba(0,180,216,0.03); }
+.sheet-input.editable { border-color:rgba(0,180,216,0.4); background:rgba(0,180,216,0.05); }
+.sheet-auto {
+  text-align:right; font-family:monospace; font-weight:600;
+  color:var(--text); padding-right:10px;
+}
+.sheet-auto.highlight { color:var(--accent); font-size:15px; }
+.sheet-auto.safe { color:var(--safe); }
+.sheet-auto.warn { color:var(--warn); }
+.sheet-auto.danger { color:var(--danger); }
+.sheet-result td { background:rgba(0,180,216,0.02); }
+.sheet-section td {
+  padding:10px 4px 6px; font-size:12px; font-weight:700;
+  color:var(--accent); border-top:1px solid var(--border);
+}
+.dose-guide-card { padding:10px 16px; }
 
 /* Time Table */
 .time-table-container { overflow-x:auto; margin-top:8px; }

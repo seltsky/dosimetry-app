@@ -13,170 +13,159 @@
   <div id="app">
     <header>
       <h1>☢️ Y-90 Dosimetry</h1>
-      <p class="subtitle">Partition Model Calculator & Safety Evaluator</p>
     </header>
 
+    <!-- Main Tabs -->
     <nav class="tabs">
-      <button class="tab active" data-tab="calc">계산</button>
-      <button class="tab" data-tab="result">결과</button>
+      <button class="tab active" data-tab="partition">Partition</button>
+      <button class="tab" data-tab="mird">MIRD</button>
+      <button class="tab" data-tab="simplicity">Simplicity</button>
       <button class="tab" data-tab="refs">문헌 DB</button>
     </nav>
 
-    <!-- Tab: Calculator -->
-    <section id="tab-calc" class="tab-content active">
-
-      <!-- Microsphere Toggle -->
+    <!-- ==================== PARTITION TAB ==================== -->
+    <section id="tab-partition" class="tab-content active">
       <div class="micro-toggle">
-        <button class="micro-btn active" data-micro="resin">Resin (SIR-Spheres)</button>
-        <button class="micro-btn" data-micro="glass">Glass (TheraSphere)</button>
+        <button class="micro-btn active" data-micro="resin" data-parent="partition">Resin</button>
+        <button class="micro-btn" data-micro="glass" data-parent="partition">Glass</button>
       </div>
-      <input type="hidden" id="microsphere" value="resin">
-
-      <!-- Scenario Tabs -->
-      <div class="scenario-tabs">
-        <button class="scenario-tab active" data-scenario="segmentectomy">RS</button>
-        <button class="scenario-tab" data-scenario="lobectomy">Lobectomy</button>
-        <button class="scenario-tab" data-scenario="largeHCC">Large HCC</button>
-        <button class="scenario-tab" data-scenario="unilobar">MF Unilobar</button>
-        <button class="scenario-tab" data-scenario="bilobar">MF Bilobar</button>
-        <button class="scenario-tab" data-scenario="pvt">MVI/PVT</button>
+      <div class="card dose-guide-card">
+        <div id="partitionGuide" class="dose-guide"></div>
       </div>
 
-      <!-- Dose Guide (auto-updates by micro + scenario) -->
-      <div class="card" id="doseGuide">
-        <div id="doseGuideContent" class="dose-guide"></div>
+      <!-- Spreadsheet-style input -->
+      <div class="card sheet-card">
+        <h3>📋 MAA Counts (선택)</h3>
+        <table class="sheet">
+          <tr><td class="sheet-label">Lung MAA counts</td><td><input type="number" id="p_maaLung" class="sheet-input" placeholder="—"></td></tr>
+          <tr><td class="sheet-label">Liver MAA counts (incl tumor)</td><td><input type="number" id="p_maaLiver" class="sheet-input" placeholder="—"></td></tr>
+          <tr><td class="sheet-label">Tumor MAA counts</td><td><input type="number" id="p_maaTumor" class="sheet-input" placeholder="—"></td></tr>
+          <tr class="sheet-result"><td class="sheet-label">→ T/N Ratio (자동)</td><td id="p_maaTN" class="sheet-auto">—</td></tr>
+          <tr class="sheet-result"><td class="sheet-label">→ LSF (자동)</td><td id="p_maaLSF" class="sheet-auto">—</td></tr>
+        </table>
       </div>
 
-      <div class="card">
-        <h3>기본 정보</h3>
-        <div class="form-grid">
-          <div class="form-row">
-            <label>Child-Pugh</label>
-            <select id="childPugh">
-              <option value="A">A</option>
-              <option value="B">B</option>
-              <option value="C">C</option>
-            </select>
-          </div>
-          <div class="form-row">
-            <label>치료 의도</label>
-            <select id="intent">
-              <option value="curative">Curative</option>
-              <option value="palliative">Palliative</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row">
-          <label>종양 위치</label>
-          <input type="text" id="segment" placeholder="예: S6, Right lobe, Caudate">
-        </div>
+      <div class="card sheet-card">
+        <h3>📋 입력 데이터</h3>
+        <table class="sheet">
+          <tr><td class="sheet-label">Treated Liver Volume (cm³)</td><td><input type="number" id="p_liverVol" class="sheet-input" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Tumor Volume (cm³)</td><td><input type="number" id="p_tumorVol" class="sheet-input" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Whole Liver Volume (cm³)</td><td><input type="number" id="p_wholeVol" class="sheet-input" step="0.1" placeholder="선택"></td></tr>
+          <tr><td class="sheet-label">T/N Ratio</td><td><input type="number" id="p_tn" class="sheet-input" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Lung Shunt (%)</td><td><input type="number" id="p_lsf" class="sheet-input" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Lung Mass (g)</td><td><input type="number" id="p_lungMass" class="sheet-input" value="800"></td></tr>
+        </table>
       </div>
 
-      <div class="card">
-        <h3>용적 데이터 (mL)</h3>
-        <div class="form-grid">
-          <div class="form-row">
-            <label>Perfused Volume</label>
-            <input type="number" id="perfusedVol" step="0.1" placeholder="mL">
-          </div>
-          <div class="form-row">
-            <label>Tumor Volume</label>
-            <input type="number" id="tumorVol" step="0.1" placeholder="mL">
-          </div>
-          <div class="form-row">
-            <label>Whole Liver Volume</label>
-            <input type="number" id="wholeVol" step="0.1" placeholder="mL (선택)">
-          </div>
-        </div>
+      <div class="card sheet-card">
+        <h3>📊 계산 결과 (실시간)</h3>
+        <table class="sheet">
+          <tr class="sheet-section"><td colspan="2">① Desired Tumor Dose</td></tr>
+          <tr><td class="sheet-label">Target Tumor Dose (Gy)</td><td><input type="number" id="p_desiredDose" class="sheet-input editable" value="250" step="10"></td></tr>
+          <tr class="sheet-result"><td class="sheet-label">→ Normal Liver AD (Gy)</td><td id="p_r1_normal" class="sheet-auto">—</td></tr>
+          <tr class="sheet-result"><td class="sheet-label">→ Lung AD (Gy)</td><td id="p_r1_lung" class="sheet-auto">—</td></tr>
+          <tr class="sheet-result"><td class="sheet-label">→ Prescribed Activity (GBq)</td><td id="p_r1_activity" class="sheet-auto highlight">—</td></tr>
+
+          <tr class="sheet-section"><td colspan="2">② Liver Limiting Dose</td></tr>
+          <tr><td class="sheet-label">Liver Limit (Gy)</td><td><input type="number" id="p_liverLimit" class="sheet-input editable" value="70" step="1"></td></tr>
+          <tr class="sheet-result"><td class="sheet-label">→ Tumor Dose (Gy)</td><td id="p_r2_tumor" class="sheet-auto">—</td></tr>
+          <tr class="sheet-result"><td class="sheet-label">→ Lung AD (Gy)</td><td id="p_r2_lung" class="sheet-auto">—</td></tr>
+          <tr class="sheet-result"><td class="sheet-label">→ Activity (GBq)</td><td id="p_r2_activity" class="sheet-auto">—</td></tr>
+
+          <tr class="sheet-section"><td colspan="2">③ Lung Limiting Dose</td></tr>
+          <tr><td class="sheet-label">Lung Limit (Gy)</td><td><input type="number" id="p_lungLimit" class="sheet-input editable" value="25" step="1"></td></tr>
+          <tr class="sheet-result"><td class="sheet-label">→ Normal Liver AD (Gy)</td><td id="p_r3_normal" class="sheet-auto">—</td></tr>
+          <tr class="sheet-result"><td class="sheet-label">→ Tumor Dose (Gy)</td><td id="p_r3_tumor" class="sheet-auto">—</td></tr>
+          <tr class="sheet-result"><td class="sheet-label">→ Activity (GBq)</td><td id="p_r3_activity" class="sheet-auto">—</td></tr>
+
+          <tr class="sheet-section"><td colspan="2">④ Prescribed Activity (역계산)</td></tr>
+          <tr><td class="sheet-label">Prescribed Activity (GBq)</td><td><input type="number" id="p_prescribedA" class="sheet-input editable" step="0.01" placeholder="직접 입력"></td></tr>
+          <tr class="sheet-result"><td class="sheet-label">→ Tumor Dose (Gy)</td><td id="p_r4_tumor" class="sheet-auto">—</td></tr>
+          <tr class="sheet-result"><td class="sheet-label">→ Normal Liver AD (Gy)</td><td id="p_r4_normal" class="sheet-auto">—</td></tr>
+          <tr class="sheet-result"><td class="sheet-label">→ Lung AD (Gy)</td><td id="p_r4_lung" class="sheet-auto">—</td></tr>
+        </table>
       </div>
 
-      <div class="card">
-        <h3>Dosimetry 파라미터</h3>
-        <!-- MAA counts toggle -->
-        <div class="maa-toggle">
-          <button class="maa-btn active" data-mode="direct">T/N 직접 입력</button>
-          <button class="maa-btn" data-mode="maa">MAA Counts 입력</button>
-        </div>
-        <div id="directInput" class="form-grid">
-          <div class="form-row">
-            <label>T/N Ratio</label>
-            <input type="number" id="tnRatio" step="0.1" placeholder="예: 4.3">
-          </div>
-          <div class="form-row">
-            <label>LSF (%)</label>
-            <input type="number" id="lsf" step="0.1" placeholder="예: 4.4">
-          </div>
-        </div>
-        <div id="maaInput" style="display:none">
-          <div class="form-grid">
-            <div class="form-row">
-              <label>Lung MAA counts</label>
-              <input type="number" id="maaLung" step="1" placeholder="Total lung counts">
-            </div>
-            <div class="form-row">
-              <label>Liver MAA counts (incl tumor)</label>
-              <input type="number" id="maaLiver" step="1" placeholder="Total liver counts">
-            </div>
-            <div class="form-row">
-              <label>Tumor MAA counts</label>
-              <input type="number" id="maaTumor" step="1" placeholder="Tumor counts">
-            </div>
-          </div>
-          <div class="maa-result" id="maaResult"></div>
-        </div>
-        <div class="form-grid" style="margin-top:8px">
-          <div class="form-row">
-            <label>Lung Mass (g)</label>
-            <input type="number" id="lungMass" value="1000" step="1">
-          </div>
-        </div>
-      </div>
-
-      <!-- Glass MIRD: TheraSphere Time Table (shown only for Glass) -->
-      <div class="card" id="glassTimeCard" style="display:none">
-        <h3>☢️ TheraSphere Dose-Time Table</h3>
-        <div class="form-grid">
-          <div class="form-row">
-            <label>Residual Waste (%)</label>
-            <input type="number" id="residualWaste" value="1" step="0.1">
-          </div>
-          <div class="form-row">
-            <label>Previous Lung Dose (Gy)</label>
-            <input type="number" id="prevLungDose" value="0" step="0.1">
-          </div>
-        </div>
-        <div id="glassTimeTable" class="time-table-container"></div>
-      </div>
-
-      <div class="card">
-        <h3>목표 종양 선량 (Gy)</h3>
-        <div class="dose-slider-container">
-          <input type="range" id="targetDoseSlider" min="50" max="600" value="250" step="10" class="dose-slider">
-          <div class="dose-display">
-            <span id="targetDoseValue" class="dose-big">250</span>
-            <span class="dose-unit">Gy</span>
-          </div>
-        </div>
-        <div class="quick-doses">
-          <button class="quick-dose" data-dose="150">150</button>
-          <button class="quick-dose" data-dose="200">200</button>
-          <button class="quick-dose active" data-dose="250">250</button>
-          <button class="quick-dose" data-dose="300">300</button>
-          <button class="quick-dose" data-dose="400">400</button>
-        </div>
-      </div>
-
-      <button id="calcBtn" class="calc-btn">계산하기</button>
+      <!-- Safety + Cases (auto-updates) -->
+      <div class="card" id="partitionSafety"></div>
+      <div class="card" id="partitionCases"></div>
     </section>
 
-    <!-- Tab: Results -->
-    <section id="tab-result" class="tab-content">
-      <div id="resultContainer">
-        <div class="empty-state">계산 탭에서 데이터를 입력하고 계산하세요</div>
+    <!-- ==================== MIRD TAB ==================== -->
+    <section id="tab-mird" class="tab-content">
+      <div class="micro-toggle">
+        <button class="micro-btn" data-micro="resin" data-parent="mird">Resin</button>
+        <button class="micro-btn active" data-micro="glass" data-parent="mird">Glass</button>
       </div>
+      <div class="card dose-guide-card">
+        <div id="mirdGuide" class="dose-guide"></div>
+      </div>
+
+      <div class="card sheet-card">
+        <h3>📋 입력 데이터</h3>
+        <table class="sheet">
+          <tr><td class="sheet-label">Target Volume (cm³)</td><td><input type="number" id="m_targetVol" class="sheet-input" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Desired Dose (Gy)</td><td><input type="number" id="m_desiredDose" class="sheet-input" value="150" step="10"></td></tr>
+          <tr><td class="sheet-label">Lung Shunt Fraction (%)</td><td><input type="number" id="m_lsf" class="sheet-input" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Residual Waste (%)</td><td><input type="number" id="m_residual" class="sheet-input" value="1" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Lung Mass (g)</td><td><input type="number" id="m_lungMass" class="sheet-input" value="1000"></td></tr>
+          <tr><td class="sheet-label">Previous Lung Dose (Gy)</td><td><input type="number" id="m_prevLung" class="sheet-input" value="0" step="0.1"></td></tr>
+        </table>
+      </div>
+
+      <div class="card sheet-card">
+        <h3>📊 MIRD 계산 결과</h3>
+        <table class="sheet">
+          <tr class="sheet-result"><td class="sheet-label">Target Mass (kg)</td><td id="m_mass" class="sheet-auto">—</td></tr>
+          <tr class="sheet-result"><td class="sheet-label">Required Activity (GBq)</td><td id="m_activity" class="sheet-auto highlight">—</td></tr>
+          <tr class="sheet-result"><td class="sheet-label">Lung Dose (Gy)</td><td id="m_lungDose" class="sheet-auto">—</td></tr>
+          <tr class="sheet-result"><td class="sheet-label">Cumulative Lung Dose (Gy)</td><td id="m_cumLung" class="sheet-auto">—</td></tr>
+          <tr class="sheet-result"><td class="sheet-label">Lung Status</td><td id="m_lungStatus" class="sheet-auto">—</td></tr>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3>⏰ Dose-Time Table (Y-90 decay)</h3>
+        <div id="mirdTimeTable" class="time-table-container"></div>
+      </div>
+
+      <div class="card" id="mirdSafety"></div>
+      <div class="card" id="mirdCases"></div>
     </section>
 
-    <!-- Tab: References -->
+    <!-- ==================== SIMPLICITY TAB ==================== -->
+    <section id="tab-simplicity" class="tab-content">
+      <div class="micro-toggle">
+        <button class="micro-btn active" data-micro="resin" data-parent="simplicity">Resin</button>
+        <button class="micro-btn" data-micro="glass" data-parent="simplicity">Glass</button>
+      </div>
+      <div class="card dose-guide-card">
+        <div id="simplicityGuide" class="dose-guide"></div>
+      </div>
+
+      <div class="card sheet-card">
+        <h3>📋 Simplicity 결과 입력</h3>
+        <p style="font-size:11px;color:var(--dim);margin-bottom:8px">Simplicity 소프트웨어 결과를 직접 입력하면 안전성 평가를 해드립니다.</p>
+        <table class="sheet">
+          <tr><td class="sheet-label">Perfused Volume (cm³)</td><td><input type="number" id="s_perfVol" class="sheet-input" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Tumor Volume (cm³)</td><td><input type="number" id="s_tumorVol" class="sheet-input" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Whole Liver Volume (cm³)</td><td><input type="number" id="s_wholeVol" class="sheet-input" step="0.1" placeholder="선택"></td></tr>
+          <tr class="sheet-section"><td colspan="2">Simplicity 출력값</td></tr>
+          <tr><td class="sheet-label">Required Activity (GBq)</td><td><input type="number" id="s_activity" class="sheet-input editable" step="0.01"></td></tr>
+          <tr><td class="sheet-label">Perfused Fraction (%)</td><td><input type="number" id="s_perfFrac" class="sheet-input editable" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Tumor Absorbed Dose (Gy)</td><td><input type="number" id="s_tumorDose" class="sheet-input editable" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Perfused Tissue AD (Gy)</td><td><input type="number" id="s_perfDose" class="sheet-input editable" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Perfused Normal Tissue AD (Gy)</td><td><input type="number" id="s_ntad" class="sheet-input editable" step="0.1"></td></tr>
+          <tr><td class="sheet-label">WL Normal Tissue AD (Gy)</td><td><input type="number" id="s_wlNtad" class="sheet-input editable" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Lung Absorbed Dose (Gy)</td><td><input type="number" id="s_lungDose" class="sheet-input editable" step="0.1"></td></tr>
+        </table>
+      </div>
+
+      <div class="card" id="simplicitySafety"></div>
+      <div class="card" id="simplicityCases"></div>
+    </section>
+
+    <!-- ==================== REFS TAB ==================== -->
     <section id="tab-refs" class="tab-content">
       <div class="card">
         <div class="search-row">
