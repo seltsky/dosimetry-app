@@ -76,17 +76,19 @@ function evalSafety(micro, tumorDose, ntad, wlNtad, lungDose, lsf) {
 
 function renderSafety(containerId, items) {
   const el = document.getElementById(containerId);
-  if (!el || !items.length) { if(el) el.innerHTML=''; return; }
-  el.innerHTML = `<h3>안전성 평가</h3>${items.map(s=>`<div class="safety-item"><span class="safety-icon">${s.icon}</span><div><div class="safety-text">${s.text}</div>${s.ref?`<div class="safety-ref">${s.ref}</div>`:''}</div></div>`).join('')}`;
+  if (!el) return;
+  if (!items.length) { el.innerHTML=''; return; }
+  el.innerHTML = `<div class="card"><h3>안전성 평가${containerId.includes('partition')?' (④ Prescribed 기준)':''}</h3>${items.map(s=>`<div class="safety-item"><span class="safety-icon">${s.icon}</span><div><div class="safety-text">${s.text}</div>${s.ref?`<div class="safety-ref">${s.ref}</div>`:''}</div></div>`).join('')}</div>`;
 }
 
 function renderCases(containerId, micro) {
   const el = document.getElementById(containerId);
-  if (!el || !REFS.cases) { if(el) el.innerHTML=''; return; }
+  if (!el) return;
+  if (!REFS.cases) { el.innerHTML=''; return; }
   const m = micro==='resin'?'Resin':'Glass';
   const cases = REFS.cases.filter(c=>!c.Microsphere||c.Microsphere===m||c.Microsphere==='Both'||c.Microsphere==='?'||c.Microsphere==='N/A').slice(0,3);
   if (!cases.length) { el.innerHTML=''; return; }
-  el.innerHTML = `<h3>⚠️ 유사 사례 주의</h3>${cases.map(c=>`<div class="warning-card"><div class="ref-title">${c.Title||''}</div><div class="ref-meta">${c.PMID?'PMID '+c.PMID+' | ':''}${c.Year||''} ${c.Journal||''}</div><div class="ref-finding">${c.Complication||''}</div></div>`).join('')}`;
+  el.innerHTML = `<div class="card"><h3>⚠️ 유사 사례 주의</h3>${cases.map(c=>`<div class="warning-card"><div class="ref-title">${c.Title||''}</div><div class="ref-meta">${c.PMID?'PMID '+c.PMID+' | ':''}${c.Year||''} ${c.Journal||''}</div><div class="ref-finding">${c.Complication||''}</div></div>`).join('')}</div>`;
 }
 
 // ====== PARTITION TAB — Real-time calc ======
@@ -134,6 +136,7 @@ function calcPartitionAll() {
 
   // ④ Prescribed activity
   const A4 = parseFloat(document.getElementById('p_prescribedA').value) || 0;
+  let safetyTumor = Dt, safetyNtad = Dn1, safetyLung = Dl1;
   if (A4 > 0) {
     const Dp4 = (A4 * C * (1-LSF/100)) / V;
     const Dt4 = Dp4 * TN * V / (TN*Vt + Vn);
@@ -142,17 +145,21 @@ function calcPartitionAll() {
     set('p_r4_tumor', Dt4.toFixed(1)+' Gy');
     set('p_r4_normal', Dn4.toFixed(1)+' Gy');
     set('p_r4_lung', Dl4.toFixed(2)+' Gy');
+    // Use prescribed values for safety evaluation
+    safetyTumor = Dt4;
+    safetyNtad = Dn4;
+    safetyLung = Dl4;
   }
 
-  // WL NTAD
+  // WL NTAD (based on safety values — prescribed if available, otherwise desired)
   let wlNtad = null;
   if (Vw > 0) {
     const totalNormal = Vw - Vt;
-    wlNtad = (Vn * Dn1) / totalNormal;
+    wlNtad = (Vn * safetyNtad) / totalNormal;
   }
 
-  // Safety
-  const safety = evalSafety(micro, Dt, Dn1, wlNtad, Dl1, LSF);
+  // Safety — based on Prescribed Activity (④) if available, otherwise Desired (①)
+  const safety = evalSafety(micro, safetyTumor, safetyNtad, wlNtad, safetyLung, LSF);
   renderSafety('partitionSafety', safety);
   renderCases('partitionCases', micro);
 }
