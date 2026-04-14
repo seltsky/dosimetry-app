@@ -2,7 +2,7 @@
 :root {
   --bg: #0a1628; --card: #111d35; --border: #1e3050;
   --accent: #00b4d8; --accent2: #48cae4;
-  --text: #e0e8f0; --dim: #6b8299;
+  --text: #e0e8f0; --dim: #9ab0c8;
   --safe: #2ecc71; --warn: #f1c40f; --danger: #e74c3c;
 }
 body { font-family:-apple-system,'Noto Sans KR',sans-serif; background:var(--bg); color:var(--text); max-width:520px; margin:0 auto; min-height:100vh; padding-bottom:20px; }
@@ -121,7 +121,7 @@ header h1 { font-size:20px; color:var(--accent); }
 .warning-card .ref-title { color:var(--danger); }
 
 /* Time table */
-.time-table-container { overflow-x:auto; margin-top:8px; }
+.time-table-container { overflow-x:scroll; -webkit-overflow-scrolling:touch; margin-top:8px; position:relative; }
 .time-table { width:100%; border-collapse:collapse; font-size:11px; }
 .time-table th { background:var(--border); color:var(--text); padding:6px 4px; text-align:center; font-weight:600; }
 .time-table td { padding:4px; text-align:center; border:1px solid rgba(30,48,80,0.3); }
@@ -133,6 +133,13 @@ header h1 { font-size:20px; color:var(--accent); }
 .gender-btn.active { background:rgba(0,180,216,0.15); color:var(--accent); border-color:var(--accent); }
 .apply-btn { width:100%; padding:12px; margin-top:10px; background:var(--accent); color:var(--bg); border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; }
 .apply-btn:active { transform:scale(0.98); }
+.patient-info-card { padding:10px 12px; }
+.mini-select { padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; }
+.mini-select:focus { outline:none; border-color:var(--accent); }
+.memo-input { flex:1; min-width:80px; padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; }
+.memo-input:focus { outline:none; border-color:var(--accent); }
+.eval-btn { width:100%; padding:12px; margin:8px 0; background:linear-gradient(135deg,var(--accent),var(--accent2)); color:var(--bg); border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; }
+.eval-btn:active { transform:scale(0.98); }
 
 /* 4-step calc table */
 .calc-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }

@@ -158,10 +158,9 @@ function calcPartitionAll() {
     wlNtad = (Vn * safetyNtad) / totalNormal;
   }
 
-  // Safety — based on Prescribed Activity (④) if available, otherwise Desired (①)
-  const safety = evalSafety(micro, safetyTumor, safetyNtad, wlNtad, safetyLung, LSF);
-  renderSafety('partitionSafety', safety);
-  renderCases('partitionCases', micro);
+  // Safety — rendered on button click, not auto
+  // Store for button use
+  window._partitionSafety = { micro, safetyTumor, safetyNtad, wlNtad, safetyLung, LSF };
 }
 
 // MAA auto-calc
@@ -371,6 +370,35 @@ function init() {
     if(el) el.addEventListener('input', calcSimplicityAll);
   });
 
+  // Partition eval button
+  const evalBtn = document.getElementById('partitionEvalBtn');
+  if(evalBtn) evalBtn.addEventListener('click',()=>{
+    calcPartitionAll();
+    const d = window._partitionSafety;
+    if(d) {
+      const safety = evalSafety(d.micro, d.safetyTumor, d.safetyNtad, d.wlNtad, d.safetyLung, d.LSF);
+      renderSafety('partitionSafety', safety);
+      renderCases('partitionCases', d.micro);
+    }
+    document.getElementById('partitionSafety').style.display = 'block';
+    document.getElementById('partitionCases').style.display = 'block';
+    evalBtn.textContent = '안전성 평가 ▲';
+  });
+
+  // Scenario select → highlight scenario tab
+  ['p_scenario','m_scenario'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('change',()=>{
+      const parent = id.startsWith('p_')?'partition':'mird';
+      const scenario = el.value;
+      tabScenario[parent] = scenario;
+      document.querySelectorAll(`.scenario-tab[data-parent="${parent}"]`).forEach(t=>{
+        t.classList.toggle('active', t.dataset.scenario===scenario);
+      });
+      renderGuide(parent+'Guide', tabMicro[parent], scenario);
+    });
+  });
+
   // Gender buttons for lung mass
   document.querySelectorAll('.gender-btn').forEach(btn=>{
     btn.addEventListener('click',()=>{
@@ -406,12 +434,13 @@ function init() {
     if(el) el.addEventListener('input', calcMAA);
   });
 
-  // MIRD dose size slider sync
+  // MIRD dose size slider sync — prevent page scroll on touch
   const doseSlider = document.getElementById('m_doseSize');
   const doseNum = document.getElementById('m_doseSizeNum');
   if (doseSlider && doseNum) {
     doseSlider.addEventListener('input', () => { doseNum.value = doseSlider.value; buildTimeTable(); });
     doseNum.addEventListener('input', () => { doseSlider.value = doseNum.value; buildTimeTable(); });
+    doseSlider.addEventListener('touchstart', (e) => { e.stopPropagation(); }, {passive:true});
   }
 
   // Refs

@@ -43,6 +43,23 @@
         <div id="partitionGuide" class="dose-guide"></div>
       </div>
 
+      <!-- Patient Info -->
+      <div class="card patient-info-card">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <select id="p_cps" class="mini-select"><option value="A">CPS A</option><option value="B">CPS B</option><option value="C">CPS C</option></select>
+          <select id="p_intent" class="mini-select"><option value="curative">Curative</option><option value="palliative">Palliative</option></select>
+          <select id="p_scenario" class="mini-select">
+            <option value="segmentectomy">Segmentectomy</option>
+            <option value="lobectomy">Lobectomy</option>
+            <option value="largeHCC">Large HCC</option>
+            <option value="unilobar">MF Unilobar</option>
+            <option value="bilobar">MF Bilobar</option>
+            <option value="pvt">MVI/PVT</option>
+          </select>
+          <input type="text" id="p_memo" class="memo-input" placeholder="메모">
+        </div>
+      </div>
+
       <!-- Partition Model inputs -->
       <div class="card sheet-card">
         <div class="excel-title">Dose Calculation - Partition Model</div>
@@ -100,9 +117,9 @@
         </table>
       </div>
 
-      <!-- Safety + Cases (auto-updates) -->
-      <div id="partitionSafety"></div>
-      <div id="partitionCases"></div>
+      <button class="eval-btn" id="partitionEvalBtn">안전성 평가 ▼</button>
+      <div id="partitionSafety" style="display:none"></div>
+      <div id="partitionCases" style="display:none"></div>
     </section>
 
     <!-- ==================== MIRD TAB ==================== -->
@@ -121,6 +138,23 @@
       </div>
       <div class="card dose-guide-card">
         <div id="mirdGuide" class="dose-guide"></div>
+      </div>
+
+      <!-- Patient Info -->
+      <div class="card patient-info-card">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <select id="m_cps" class="mini-select"><option value="A">CPS A</option><option value="B">CPS B</option><option value="C">CPS C</option></select>
+          <select id="m_intent" class="mini-select"><option value="curative">Curative</option><option value="palliative">Palliative</option></select>
+          <select id="m_scenario" class="mini-select">
+            <option value="segmentectomy">Segmentectomy</option>
+            <option value="lobectomy">Lobectomy</option>
+            <option value="largeHCC">Large HCC</option>
+            <option value="unilobar">MF Unilobar</option>
+            <option value="bilobar">MF Bilobar</option>
+            <option value="pvt">MVI/PVT</option>
+          </select>
+          <input type="text" id="m_memo" class="memo-input" placeholder="메모">
+        </div>
       </div>
 
       <div class="card sheet-card">
