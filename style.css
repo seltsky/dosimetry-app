@@ -160,4 +160,25 @@ header h1 { font-size:20px; color:var(--accent); }
 .row-blue td { background:rgba(30,144,255,0.06); }
 .row-blue .row-label { color:#1e90ff; }
 
+/* Save/Cases */
+.save-card { padding:10px 12px; }
+.save-btn { width:100%; padding:10px; background:var(--accent); color:var(--bg); border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
+.save-btn:active { transform:scale(0.98); }
+.mini-input { padding:6px 8px; background:var(--bg); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:12px; width:90px; }
+.mini-input:focus { outline:none; border-color:var(--accent); }
+
+.case-card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:12px; margin:6px 12px; cursor:pointer; }
+.case-card:active { border-color:var(--accent); }
+.case-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+.case-id { font-weight:700; font-size:13px; }
+.case-date { font-size:11px; color:var(--dim); }
+.case-tags { display:flex; gap:4px; flex-wrap:wrap; margin:4px 0; }
+.case-tag { font-size:10px; padding:2px 8px; border-radius:10px; background:rgba(0,180,216,0.1); color:var(--accent); }
+.case-tag.resin { background:rgba(0,180,216,0.1); color:var(--accent); }
+.case-tag.glass { background:rgba(243,156,18,0.1); color:#f39c12; }
+.case-summary { font-size:11px; color:var(--dim); }
+.case-actions { display:flex; gap:4px; margin-top:6px; }
+.case-action-btn { padding:4px 10px; border:1px solid var(--border); border-radius:6px; background:none; color:var(--dim); font-size:10px; cursor:pointer; }
+.case-action-btn.danger { border-color:rgba(231,76,60,0.3); color:var(--danger); }
+
 .empty-state { text-align:center; color:var(--dim); padding:40px 20px; font-size:14px; }

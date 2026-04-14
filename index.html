@@ -21,7 +21,8 @@
       <button class="tab" data-tab="mird">MIRD</button>
       <button class="tab" data-tab="maa">MAA</button>
       <button class="tab" data-tab="simplicity">Simplicity</button>
-      <button class="tab" data-tab="refs">문헌 DB</button>
+      <button class="tab" data-tab="cases">케이스</button>
+      <button class="tab" data-tab="refs">문헌</button>
     </nav>
 
     <!-- ==================== PARTITION TAB ==================== -->
@@ -121,6 +122,19 @@
       <button class="eval-btn" id="partitionEvalBtn">안전성 평가 ▼</button>
       <div id="partitionSafety" style="display:none"></div>
       <div id="partitionCases" style="display:none"></div>
+
+      <!-- Patient data for saving -->
+      <div class="card save-card" style="display:none" id="partitionSaveCard">
+        <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">환자 데이터 저장 (선택)</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <div class="info-field"><span class="info-label">환자 ID</span><input type="text" id="p_patId" class="mini-input" placeholder="익명 가능"></div>
+          <div class="info-field"><span class="info-label">성별</span><select id="p_sex" class="mini-select"><option value="">—</option><option value="M">남</option><option value="F">여</option></select></div>
+          <div class="info-field"><span class="info-label">나이</span><input type="number" id="p_age" class="mini-input" placeholder="—" style="width:50px"></div>
+          <div class="info-field"><span class="info-label">진단</span><select id="p_dx" class="mini-select"><option value="HCC">HCC</option><option value="CCA">CCA</option><option value="mCRC">mCRC</option><option value="mNET">mNET</option><option value="other">Other</option></select></div>
+          <div class="info-field"><span class="info-label">시술일</span><input type="date" id="p_date" class="mini-input"></div>
+        </div>
+        <button class="save-btn" id="partitionSaveBtn">💾 케이스 저장</button>
+      </div>
     </section>
 
     <!-- ==================== MIRD TAB ==================== -->
@@ -196,6 +210,18 @@
 
       <div id="mirdSafety"></div>
       <div id="mirdCases"></div>
+
+      <div class="card save-card">
+        <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">환자 데이터 저장 (선택)</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <div class="info-field"><span class="info-label">환자 ID</span><input type="text" id="m_patId" class="mini-input" placeholder="익명 가능"></div>
+          <div class="info-field"><span class="info-label">성별</span><select id="m_sex" class="mini-select"><option value="">—</option><option value="M">남</option><option value="F">여</option></select></div>
+          <div class="info-field"><span class="info-label">나이</span><input type="number" id="m_age" class="mini-input" placeholder="—" style="width:50px"></div>
+          <div class="info-field"><span class="info-label">진단</span><select id="m_dx" class="mini-select"><option value="HCC">HCC</option><option value="CCA">CCA</option><option value="mCRC">mCRC</option><option value="mNET">mNET</option><option value="other">Other</option></select></div>
+          <div class="info-field"><span class="info-label">시술일</span><input type="date" id="m_date" class="mini-input"></div>
+        </div>
+        <button class="save-btn" id="mirdSaveBtn">💾 케이스 저장</button>
+      </div>
     </section>
 
     <!-- ==================== MAA TAB ==================== -->
@@ -267,6 +293,24 @@
 
       <div id="simplicitySafety"></div>
       <div id="simplicityCases"></div>
+    </section>
+
+    <!-- ==================== CASES DB TAB ==================== -->
+    <section id="tab-cases" class="tab-content">
+      <div class="card">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <input type="text" id="caseSearch" class="memo-input" placeholder="검색 (환자ID, 메모, 진단)" style="flex:2;min-width:120px">
+          <select id="caseSort" class="mini-select">
+            <option value="date">날짜순</option>
+            <option value="micro">Microsphere</option>
+            <option value="scenario">시나리오</option>
+            <option value="dx">진단별</option>
+          </select>
+        </div>
+      </div>
+      <div id="caseStats" style="font-size:11px;color:var(--dim);padding:4px 12px"></div>
+      <div id="caseList"></div>
+      <div class="empty-state" id="caseEmpty">저장된 케이스가 없습니다</div>
     </section>
 
     <!-- ==================== REFS TAB ==================== -->

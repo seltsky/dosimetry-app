@@ -6,6 +6,215 @@ let REFS = { thresholds: [], cases: [] };
 fetch('references.json').then(r=>r.json()).then(d=>{ REFS=d; renderRefs(); }).catch(()=>{});
 
 const C = 49670; // Gy·g/GBq
+const CASES_KEY = 'dosimetry_cases';
+const PW_KEY = 'dosimetry_admin_pw';
+
+// ====== Case DB Functions ======
+function loadCases() { try { return JSON.parse(localStorage.getItem(CASES_KEY)||'[]'); } catch { return []; } }
+function saveCases(cases) { localStorage.setItem(CASES_KEY, JSON.stringify(cases)); }
+
+function savePartitionCase() {
+  const c = {
+    id: Date.now().toString(36),
+    savedAt: new Date().toISOString(),
+    model: 'Partition',
+    micro: tabMicro.partition,
+    patId: document.getElementById('p_patId')?.value || '',
+    sex: document.getElementById('p_sex')?.value || '',
+    age: document.getElementById('p_age')?.value || '',
+    dx: document.getElementById('p_dx')?.value || '',
+    date: document.getElementById('p_date')?.value || new Date().toISOString().slice(0,10),
+    cps: document.getElementById('p_cps')?.value || '',
+    intent: document.getElementById('p_intent')?.value || '',
+    scenario: document.getElementById('p_scenario')?.value || '',
+    memo: document.getElementById('p_memo')?.value || '',
+    // Input values
+    liverVol: document.getElementById('p_liverVol')?.value || '',
+    tumorVol: document.getElementById('p_tumorVol')?.value || '',
+    wholeVol: document.getElementById('p_wholeVol')?.value || '',
+    tn: document.getElementById('p_tn')?.value || '',
+    lsf: document.getElementById('p_lsf')?.value || '',
+    lungMass: document.getElementById('p_lungMass')?.value || '',
+    desiredDose: document.getElementById('p_desiredDose')?.value || '',
+    liverLimit: document.getElementById('p_liverLimit')?.value || '',
+    lungLimit: document.getElementById('p_lungLimit')?.value || '',
+    prescribedA: document.getElementById('p_prescribedA')?.value || '',
+    // Results (from DOM)
+    r1_activity: document.getElementById('p_r1_activity')?.textContent || '',
+    r1_normal: document.getElementById('p_r1_normal')?.textContent || '',
+    r1_lung: document.getElementById('p_r1_lung')?.textContent || '',
+    r2_tumor: document.getElementById('p_r2_tumor')?.textContent || '',
+    r2_activity: document.getElementById('p_r2_activity')?.textContent || '',
+    r3_tumor: document.getElementById('p_r3_tumor')?.textContent || '',
+    r3_activity: document.getElementById('p_r3_activity')?.textContent || '',
+    r4_tumor: document.getElementById('p_r4_tumor')?.textContent || '',
+    r4_normal: document.getElementById('p_r4_normal')?.textContent || '',
+    r4_lung: document.getElementById('p_r4_lung')?.textContent || '',
+  };
+  const cases = loadCases();
+  cases.unshift(c);
+  saveCases(cases);
+  return c;
+}
+
+function saveMIRDCase() {
+  const c = {
+    id: Date.now().toString(36),
+    savedAt: new Date().toISOString(),
+    model: 'MIRD',
+    micro: tabMicro.mird,
+    patId: document.getElementById('m_patId')?.value || '',
+    sex: document.getElementById('m_sex')?.value || '',
+    age: document.getElementById('m_age')?.value || '',
+    dx: document.getElementById('m_dx')?.value || '',
+    date: document.getElementById('m_date')?.value || new Date().toISOString().slice(0,10),
+    cps: document.getElementById('m_cps')?.value || '',
+    intent: document.getElementById('m_intent')?.value || '',
+    scenario: document.getElementById('m_scenario')?.value || '',
+    memo: document.getElementById('m_memo')?.value || '',
+    targetVol: document.getElementById('m_targetVol')?.value || '',
+    desiredDose: document.getElementById('m_desiredDose')?.value || '',
+    lsf: document.getElementById('m_lsf')?.value || '',
+    residual: document.getElementById('m_residual')?.value || '',
+    lungMass: document.getElementById('m_lungMass')?.value || '',
+    prevLung: document.getElementById('m_prevLung')?.value || '',
+    activity: document.getElementById('m_activity')?.textContent || '',
+    lungDose: document.getElementById('m_lungDose')?.textContent || '',
+  };
+  const cases = loadCases();
+  cases.unshift(c);
+  saveCases(cases);
+  return c;
+}
+
+function checkPassword(action, callback) {
+  const stored = localStorage.getItem(PW_KEY);
+  if (!stored) {
+    const pw = prompt('관리자 비밀번호를 설정하세요 (최초 1회):');
+    if (pw) { localStorage.setItem(PW_KEY, pw); callback(); }
+  } else {
+    const pw = prompt(`${action} 비밀번호 입력:`);
+    if (pw === stored) callback();
+    else if (pw !== null) alert('비밀번호가 틀렸습니다.');
+  }
+}
+
+function renderCaseList() {
+  const cases = loadCases();
+  const container = document.getElementById('caseList');
+  const empty = document.getElementById('caseEmpty');
+  const stats = document.getElementById('caseStats');
+  const search = (document.getElementById('caseSearch')?.value||'').toLowerCase();
+  const sortBy = document.getElementById('caseSort')?.value || 'date';
+
+  if (!container) return;
+
+  let filtered = cases;
+  if (search) {
+    filtered = cases.filter(c => {
+      const text = [c.patId, c.memo, c.dx, c.scenario, c.micro, c.date].join(' ').toLowerCase();
+      return text.includes(search);
+    });
+  }
+
+  // Sort
+  filtered.sort((a, b) => {
+    if (sortBy === 'date') return (b.date||'').localeCompare(a.date||'');
+    if (sortBy === 'micro') return (a.micro||'').localeCompare(b.micro||'');
+    if (sortBy === 'scenario') return (a.scenario||'').localeCompare(b.scenario||'');
+    if (sortBy === 'dx') return (a.dx||'').localeCompare(b.dx||'');
+    return 0;
+  });
+
+  if (stats) stats.textContent = `총 ${cases.length}건${search?` (필터: ${filtered.length}건)`:''}`;
+
+  if (!filtered.length) {
+    container.innerHTML = '';
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  container.innerHTML = filtered.map(c => `
+    <div class="case-card" data-id="${c.id}">
+      <div class="case-header">
+        <span class="case-id">${c.patId || '익명'} ${c.sex?'('+c.sex+(c.age?'/'+c.age:'')+')':''}</span>
+        <span class="case-date">${c.date||'날짜없음'}</span>
+      </div>
+      <div class="case-tags">
+        <span class="case-tag ${c.micro}">${c.micro||''}</span>
+        <span class="case-tag">${c.model||''}</span>
+        <span class="case-tag">${c.scenario||''}</span>
+        <span class="case-tag">${c.dx||''}</span>
+        <span class="case-tag">${c.cps?'CPS '+c.cps:''}</span>
+      </div>
+      <div class="case-summary">
+        ${c.model==='Partition'?`Tumor ${c.desiredDose||'—'}Gy | A: ${c.r1_activity||'—'} | Prescribed: ${c.prescribedA?c.prescribedA+'GBq':'—'}`:
+        `Dose ${c.desiredDose||'—'}Gy | Vol ${c.targetVol||'—'}cc | A: ${c.activity||'—'}`}
+        ${c.memo?` | ${c.memo}`:''}
+      </div>
+      <div class="case-actions">
+        <button class="case-action-btn case-load-btn" data-id="${c.id}">불러오기</button>
+        <button class="case-action-btn danger case-del-btn" data-id="${c.id}">삭제</button>
+      </div>
+    </div>
+  `).join('');
+
+  // Event: load case
+  container.querySelectorAll('.case-load-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const caseData = cases.find(c => c.id === btn.dataset.id);
+      if (caseData) loadCaseToTab(caseData);
+    });
+  });
+
+  // Event: delete case
+  container.querySelectorAll('.case-del-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      checkPassword('삭제', () => {
+        const updated = cases.filter(c => c.id !== btn.dataset.id);
+        saveCases(updated);
+        renderCaseList();
+      });
+    });
+  });
+}
+
+function loadCaseToTab(c) {
+  if (c.model === 'Partition') {
+    // Switch to partition tab
+    document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
+    document.querySelector('[data-tab="partition"]').classList.add('active');
+    document.getElementById('tab-partition').classList.add('active');
+    // Fill values
+    const fields = {p_liverVol:'liverVol',p_tumorVol:'tumorVol',p_wholeVol:'wholeVol',p_tn:'tn',p_lsf:'lsf',p_lungMass:'lungMass',p_desiredDose:'desiredDose',p_liverLimit:'liverLimit',p_lungLimit:'lungLimit',p_prescribedA:'prescribedA',p_cps:'cps',p_intent:'intent',p_scenario:'scenario',p_memo:'memo',p_patId:'patId',p_sex:'sex',p_age:'age',p_dx:'dx',p_date:'date'};
+    Object.entries(fields).forEach(([elId, key]) => {
+      const el = document.getElementById(elId);
+      if (el && c[key]) el.value = c[key];
+    });
+    // Set micro
+    tabMicro.partition = c.micro || 'resin';
+    document.querySelectorAll('.micro-btn[data-parent="partition"]').forEach(b => b.classList.toggle('active', b.dataset.micro === tabMicro.partition));
+    calcPartitionAll();
+  } else {
+    // Switch to MIRD tab
+    document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
+    document.querySelector('[data-tab="mird"]').classList.add('active');
+    document.getElementById('tab-mird').classList.add('active');
+    const fields = {m_targetVol:'targetVol',m_desiredDose:'desiredDose',m_lsf:'lsf',m_residual:'residual',m_lungMass:'lungMass',m_prevLung:'prevLung',m_cps:'cps',m_intent:'intent',m_scenario:'scenario',m_memo:'memo',m_patId:'patId',m_sex:'sex',m_age:'age',m_dx:'dx',m_date:'date'};
+    Object.entries(fields).forEach(([elId, key]) => {
+      const el = document.getElementById(elId);
+      if (el && c[key]) el.value = c[key];
+    });
+    tabMicro.mird = c.micro || 'glass';
+    document.querySelectorAll('.micro-btn[data-parent="mird"]').forEach(b => b.classList.toggle('active', b.dataset.micro === tabMicro.mird));
+    calcMIRDAll();
+  }
+}
 const tabMicro = { partition:'resin', mird:'glass', simplicity:'resin' };
 const tabScenario = { partition:'segmentectomy', mird:'segmentectomy', simplicity:'segmentectomy' };
 
@@ -326,6 +535,7 @@ function init() {
       if(pc) pc.style.display='none';
       if(eb) eb.textContent='안전성 평가 ▼';
       if(tab.dataset.tab==='refs') renderRefs();
+      if(tab.dataset.tab==='cases') renderCaseList();
     });
   });
 
@@ -377,6 +587,19 @@ function init() {
     if(el) el.addEventListener('input', calcSimplicityAll);
   });
 
+  // Save buttons
+  const pSaveBtn = document.getElementById('partitionSaveBtn');
+  if(pSaveBtn) pSaveBtn.addEventListener('click',()=>{
+    savePartitionCase();
+    alert('케이스가 저장되었습니다!');
+  });
+  const mSaveBtn = document.getElementById('mirdSaveBtn');
+  if(mSaveBtn) mSaveBtn.addEventListener('click',()=>{
+    saveMIRDCase();
+    alert('케이스가 저장되었습니다!');
+  });
+
+  // Show save card after eval
   // Partition eval button
   const evalBtn = document.getElementById('partitionEvalBtn');
   if(evalBtn) evalBtn.addEventListener('click',()=>{
@@ -389,6 +612,11 @@ function init() {
     }
     document.getElementById('partitionSafety').style.display = 'block';
     document.getElementById('partitionCases').style.display = 'block';
+    const saveCard = document.getElementById('partitionSaveCard');
+    if(saveCard) saveCard.style.display = 'block';
+    // Set today's date
+    const dateEl = document.getElementById('p_date');
+    if(dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
     evalBtn.textContent = '안전성 평가 ▲';
   });
 
@@ -454,6 +682,12 @@ function init() {
   ['refSearch','refFilter','refMicro'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) { el.addEventListener('input',renderRefs); el.addEventListener('change',renderRefs); }
+  });
+
+  // Case search/sort
+  ['caseSearch','caseSort'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) { el.addEventListener('input',renderCaseList); el.addEventListener('change',renderCaseList); }
   });
 
   // Initial render
