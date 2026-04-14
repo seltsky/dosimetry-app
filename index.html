@@ -19,6 +19,7 @@
     <nav class="tabs">
       <button class="tab active" data-tab="partition">Partition</button>
       <button class="tab" data-tab="mird">MIRD</button>
+      <button class="tab" data-tab="maa">MAA</button>
       <button class="tab" data-tab="simplicity">Simplicity</button>
       <button class="tab" data-tab="refs">문헌 DB</button>
     </nav>
@@ -42,47 +43,24 @@
         <div id="partitionGuide" class="dose-guide"></div>
       </div>
 
-      <!-- MAA Counts — Excel Sheet 1 style -->
-      <div class="card sheet-card">
-        <div class="excel-title">MAA Counts</div>
-        <div class="maa-section">
-          <div class="maa-section-title maa-cyan">Lung MAA counts</div>
-          <div class="maa-row"><span>Right lung counts</span><input type="number" id="p_maaR" placeholder="—"></div>
-          <div class="maa-row"><span>Left lung counts</span><input type="number" id="p_maaL" placeholder="—"></div>
-          <div class="maa-row"><span><strong>Total lung counts</strong></span><span class="maa-auto" id="p_maaLungTotal">—</span></div>
-        </div>
-        <div class="maa-section">
-          <div class="maa-section-title maa-green">Liver MAA counts</div>
-          <div class="maa-row"><span>Total liver counts (incl tumour)</span><input type="number" id="p_maaLiver" placeholder="—"></div>
-          <div class="maa-row"><span>Tumour counts</span><input type="number" id="p_maaTumor" placeholder="—"></div>
-          <div class="maa-row"><span><strong>Normal liver counts</strong></span><span class="maa-auto" id="p_maaNormal">—</span></div>
-        </div>
-        <div class="maa-section">
-          <div class="maa-section-title maa-green">Liver volumes</div>
-          <div class="maa-row"><span>Total liver volume incl tumour (cm³)</span><input type="number" id="p_liverVol" step="0.1"></div>
-          <div class="maa-row"><span>Tumour volume (cm³)</span><input type="number" id="p_tumorVol" step="0.1"></div>
-          <div class="maa-row"><span><strong>Normal liver volume (cm³)</strong></span><span class="maa-auto" id="p_normalVol">—</span></div>
-        </div>
-        <div class="maa-section">
-          <div class="maa-section-title maa-yellow">Calculated</div>
-          <div class="maa-row"><span><strong>Lung shunt (%)</strong></span><span class="maa-auto" id="p_maaLSF" style="color:#ffd700">—</span></div>
-          <div class="maa-row"><span><strong>T/N ratio</strong></span><span class="maa-auto" id="p_maaTN" style="color:#ffd700">—</span></div>
-        </div>
-      </div>
-
-      <!-- Partition Model — Excel Sheet 2 style -->
+      <!-- Partition Model inputs -->
       <div class="card sheet-card">
         <div class="excel-title">Dose Calculation - Partition Model</div>
-
-        <!-- Input row (yellow cells) -->
-        <div style="display:flex;gap:1px;margin-bottom:8px;flex-wrap:wrap">
-          <div class="p-cell row-cyan" style="flex:1;min-width:45%"><div class="p-label">Lung Shunt</div><input type="number" id="p_lsf" class="sheet-input editable" step="0.01" style="width:80px;background:#3d3d00;color:#ffd700;border-color:#666600"> %</div>
-          <div class="p-cell row-cyan" style="flex:1;min-width:45%"><div class="p-label">Treated Liver Vol</div><span class="maa-auto" id="p_dispLiverVol">—</span> cm³</div>
-          <div class="p-cell row-cyan" style="flex:1;min-width:45%"><div class="p-label">Treated Tumour Vol</div><span class="maa-auto" id="p_dispTumorVol">—</span> cm³</div>
-          <div class="p-cell row-cyan" style="flex:1;min-width:45%"><div class="p-label">Lung Mass</div><input type="number" id="p_lungMass" class="sheet-input editable" value="800" style="width:80px;background:#3d3d00;color:#ffd700;border-color:#666600"> g</div>
-          <div class="p-cell row-cyan" style="flex:1;min-width:45%"><div class="p-label">T/N Ratio</div><input type="number" id="p_tn" class="sheet-input editable" step="0.1" style="width:80px;background:#3d3d00;color:#ffd700;border-color:#666600"></div>
-          <div class="p-cell row-cyan" style="flex:1;min-width:45%"><div class="p-label">Whole Liver Vol (선택)</div><input type="number" id="p_wholeVol" class="sheet-input" step="0.1" style="width:80px" placeholder="—"> cm³</div>
-        </div>
+        <table class="sheet">
+          <tr><td class="sheet-label">Lung Shunt (%)</td><td><input type="number" id="p_lsf" class="sheet-input editable" step="0.01"></td></tr>
+          <tr><td class="sheet-label">Treated Liver Volume (cm³)</td><td><input type="number" id="p_liverVol" class="sheet-input editable" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Tumor Volume (cm³)</td><td><input type="number" id="p_tumorVol" class="sheet-input editable" step="0.1"></td></tr>
+          <tr><td class="sheet-label">T/N Ratio</td><td><input type="number" id="p_tn" class="sheet-input editable" step="0.1"></td></tr>
+          <tr><td class="sheet-label">Lung Mass (g)</td><td>
+            <div style="display:flex;gap:4px;align-items:center;justify-content:flex-end">
+              <button class="gender-btn" data-val="600" id="p_lungF">♀ 600</button>
+              <button class="gender-btn active" data-val="800" id="p_lungM">♂ 800</button>
+              <input type="number" id="p_lungMass" class="sheet-input editable" value="800" style="width:70px">
+            </div>
+          </td></tr>
+          <tr><td class="sheet-label">Whole Liver Volume (cm³)</td><td><input type="number" id="p_wholeVol" class="sheet-input" step="0.1" placeholder="선택"></td></tr>
+        </table>
+      </div>
 
         <!-- 4-step table — Excel grid style -->
         <table class="calc-table">
@@ -182,6 +160,37 @@
 
       <div class="card" id="mirdSafety"></div>
       <div class="card" id="mirdCases"></div>
+    </section>
+
+    <!-- ==================== MAA TAB ==================== -->
+    <section id="tab-maa" class="tab-content">
+      <div class="card sheet-card">
+        <div class="excel-title">MAA Counts → T/N Ratio & LSF 계산</div>
+        <div class="maa-section">
+          <div class="maa-section-title maa-cyan">Lung MAA counts</div>
+          <div class="maa-row"><span>Right lung counts</span><input type="number" id="p_maaR" placeholder="—"></div>
+          <div class="maa-row"><span>Left lung counts</span><input type="number" id="p_maaL" placeholder="—"></div>
+          <div class="maa-row"><span><strong>Total lung counts</strong></span><span class="maa-auto" id="p_maaLungTotal">—</span></div>
+        </div>
+        <div class="maa-section">
+          <div class="maa-section-title maa-green">Liver MAA counts</div>
+          <div class="maa-row"><span>Total liver counts (incl tumour)</span><input type="number" id="p_maaLiver" placeholder="—"></div>
+          <div class="maa-row"><span>Tumour counts</span><input type="number" id="p_maaTumor" placeholder="—"></div>
+          <div class="maa-row"><span><strong>Normal liver counts</strong></span><span class="maa-auto" id="p_maaNormal">—</span></div>
+        </div>
+        <div class="maa-section">
+          <div class="maa-section-title maa-green">Liver volumes</div>
+          <div class="maa-row"><span>Total liver vol incl tumour (cm³)</span><input type="number" id="maa_liverVol" step="0.1"></div>
+          <div class="maa-row"><span>Tumour volume (cm³)</span><input type="number" id="maa_tumorVol" step="0.1"></div>
+          <div class="maa-row"><span><strong>Normal liver volume (cm³)</strong></span><span class="maa-auto" id="p_normalVol">—</span></div>
+        </div>
+        <div class="maa-section">
+          <div class="maa-section-title maa-yellow">결과</div>
+          <div class="maa-row"><span><strong>Lung shunt (%)</strong></span><span class="maa-auto" id="p_maaLSF" style="color:#ffd700;font-size:16px">—</span></div>
+          <div class="maa-row"><span><strong>T/N ratio</strong></span><span class="maa-auto" id="p_maaTN" style="color:#ffd700;font-size:16px">—</span></div>
+        </div>
+        <button class="apply-btn" id="applyMAA">Partition 탭에 적용 →</button>
+      </div>
     </section>
 
     <!-- ==================== SIMPLICITY TAB ==================== -->

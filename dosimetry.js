@@ -164,27 +164,22 @@ function calcMAA() {
   const lung = R + L;
   const liver = parseFloat(document.getElementById('p_maaLiver')?.value) || 0;
   const tumor = parseFloat(document.getElementById('p_maaTumor')?.value) || 0;
-  const Vt = parseFloat(document.getElementById('p_tumorVol')?.value) || 0;
-  const V = parseFloat(document.getElementById('p_liverVol')?.value) || 0;
+  const Vt = parseFloat(document.getElementById('maa_tumorVol')?.value) || 0;
+  const V = parseFloat(document.getElementById('maa_liverVol')?.value) || 0;
 
   // Display totals
   set('p_maaLungTotal', lung>0?lung.toFixed(1):'—');
   const normalCounts = liver>0&&tumor>0?liver-tumor:0;
   set('p_maaNormal', normalCounts>0?normalCounts.toFixed(0):'—');
   set('p_normalVol', V>0&&Vt>0?(V-Vt).toFixed(1):'—');
-  set('p_dispLiverVol', V>0?V.toFixed(1):'—');
-  set('p_dispTumorVol', Vt>0?Vt.toFixed(1):'—');
 
   if (lung>0 && liver>0 && tumor>0 && Vt>0 && V>0) {
     const Vn = V - Vt;
     const tn = (tumor/Vt) / (normalCounts/Vn);
     const lsf = (lung / (lung + liver)) * 100;
-    document.getElementById('p_tn').value = tn.toFixed(2);
-    document.getElementById('p_lsf').value = lsf.toFixed(2);
     set('p_maaTN', tn.toFixed(2));
     set('p_maaLSF', lsf.toFixed(2)+'%');
   }
-  calcPartitionAll();
 }
 
 // ====== MIRD TAB — Real-time calc + Time Table ======
@@ -240,10 +235,10 @@ function buildTimeTable() {
   const lambda = Math.log(2) / hl;
   const tzOff = 14;
 
-  const days = ['Sun(Cal)','Mon','Tue','Wed','Thu','Fri','Sat','Sun','Mon','Tue'];
+  const days = ['Sun(Cal)','Mon','Tue','Wed','Thu','Fri','Sat','Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const times = ['08:00','10:00','12:00','14:00','16:00','18:00','20:00'];
 
-  let html = `<table class="time-table"><tr><th>Time</th>`;
+  let html = `<table class="time-table"><tr><th></th><th colspan="7" style="background:rgba(46,139,87,0.15);color:#2e8b57">Week 1</th><th colspan="7" style="background:rgba(30,144,255,0.1);color:#1e90ff">Week 2</th></tr><tr><th>Time</th>`;
   days.forEach(d => html += `<th>${d}</th>`);
   html += '</tr>';
 
@@ -351,9 +346,10 @@ function init() {
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', calcPartitionAll);
   });
-  ['p_maaR','p_maaL','p_maaLiver','p_maaTumor','p_liverVol','p_tumorVol'].forEach(id=>{
+  // Partition volume inputs also trigger calc
+  ['p_liverVol','p_tumorVol'].forEach(id=>{
     const el = document.getElementById(id);
-    if(el) el.addEventListener('input', calcMAA);
+    if(el) el.addEventListener('input', calcPartitionAll);
   });
 
   // MIRD inputs
@@ -366,6 +362,41 @@ function init() {
   ['s_activity','s_tumorDose','s_perfDose','s_ntad','s_wlNtad','s_lungDose','s_perfFrac','s_perfVol','s_tumorVol','s_wholeVol'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', calcSimplicityAll);
+  });
+
+  // Gender buttons for lung mass
+  document.querySelectorAll('.gender-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.gender-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('p_lungMass').value = btn.dataset.val;
+      calcPartitionAll();
+    });
+  });
+
+  // MAA tab: Apply to Partition
+  const applyBtn = document.getElementById('applyMAA');
+  if(applyBtn) applyBtn.addEventListener('click',()=>{
+    const tn = document.getElementById('p_maaTN')?.textContent;
+    const lsf = document.getElementById('p_maaLSF')?.textContent?.replace('%','');
+    const lv = document.getElementById('maa_liverVol')?.value;
+    const tv = document.getElementById('maa_tumorVol')?.value;
+    if(tn&&tn!=='—') document.getElementById('p_tn').value = tn;
+    if(lsf&&lsf!=='—') document.getElementById('p_lsf').value = lsf;
+    if(lv) document.getElementById('p_liverVol').value = lv;
+    if(tv) document.getElementById('p_tumorVol').value = tv;
+    // Switch to Partition tab
+    document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
+    document.querySelector('[data-tab="partition"]').classList.add('active');
+    document.getElementById('tab-partition').classList.add('active');
+    calcPartitionAll();
+  });
+
+  // MAA calc on input
+  ['p_maaR','p_maaL','p_maaLiver','p_maaTumor','maa_liverVol','maa_tumorVol'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.addEventListener('input', calcMAA);
   });
 
   // MIRD dose size slider sync

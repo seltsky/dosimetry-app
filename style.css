@@ -128,6 +128,12 @@ header h1 { font-size:20px; color:var(--accent); }
 .time-table td.highlight { background:rgba(0,180,216,0.15); color:var(--accent); font-weight:700; }
 .time-table .row-header { text-align:left; font-weight:600; color:var(--dim); white-space:nowrap; }
 
+/* Gender buttons */
+.gender-btn { padding:4px 10px; border:1px solid var(--border); border-radius:6px; background:none; color:var(--dim); font-size:11px; font-weight:600; cursor:pointer; }
+.gender-btn.active { background:rgba(0,180,216,0.15); color:var(--accent); border-color:var(--accent); }
+.apply-btn { width:100%; padding:12px; margin-top:10px; background:var(--accent); color:var(--bg); border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; }
+.apply-btn:active { transform:scale(0.98); }
+
 /* 4-step calc table */
 .calc-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
 .calc-table th { padding:6px 4px; text-align:center; font-size:10px; color:var(--dim); font-weight:600; border-bottom:2px solid var(--border); }
