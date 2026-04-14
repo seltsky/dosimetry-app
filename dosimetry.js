@@ -415,83 +415,89 @@ function init() {
   });
 
   // Scenario-specific dose guides
+  // PPT 기반 시나리오별 dose guides
   const DOSE_GUIDES = {
     resin: {
       segmentectomy: [
+        ['Tumor dose', '>250 Gy', 'PPT (SIR-Spheres RS)'],
         ['Tumor dose (optimal)', '≥300 Gy', 'Hermann 2024, Radiology'],
-        ['Tumor dose (minimum)', '≥250 Gy', 'PPT/NCT04172714'],
-        ['vTAD (CR)', '≥600 Gy', 'PMID 41638619 (voxel, 직접비교 불가)'],
-        ['Normal tissue', 'Ablation intent (제한 없음)', ''],
+        ['Model', 'Single compartment (MIRD) enough', 'PPT'],
+        ['Curative intent', 'Late 1st week or early 2nd week', 'PPT'],
         ['Lung', '<15 Gy/session', 'Korean guideline'],
       ],
       lobectomy: [
-        ['Tumor dose (partition)', '≥250 Gy', 'NCT04172714'],
-        ['Tumor dose (MIRD)', '≥100 Gy', 'SARAH'],
+        ['Tumor dose (Partition)', '>250 Gy', 'PPT'],
+        ['Tumor dose (MIRD)', '>100 Gy', 'PPT'],
         ['Perfused NTAD', '~70 Gy', 'PPT'],
-        ['OS benefit', '>100 Gy → 14.1 vs 6.1개월', 'SARAH/Hermann 2020'],
+        ['용도', "Bridging to LT / Neoadjuvant", 'PPT'],
         ['Lung', '<15 Gy/session', 'Korean guideline'],
       ],
-      hcc: [
-        ['OR threshold', '≥176 Gy (mean tumor dose)', 'Vouche 2023, JVIR'],
-        ['CR threshold', '≥247 Gy', 'Vouche 2023, JVIR'],
-        ['CR optimal (ROC)', '≥233 Gy', 'PMID 40347554'],
-        ['OS benefit', '≥150 Gy → 32.2 vs 17.5mo', 'PMID 40255874'],
+      largeHCC: [
+        ['Tumor dose', '>100~157 Gy', 'PPT (SARAH/Doyle)'],
+        ['STRATUM threshold', '150 Gy', 'PPT'],
+        ['Normal tissue AD', '<40~70 Gy', 'PPT'],
         ['WL NTAD safe', '<40 Gy (TD50 52Gy)', 'Strigari 2010'],
+        ['Lung', '<15 Gy/session', 'Korean guideline'],
       ],
-      crclm: [
-        ['OS benefit', '≥100 Gy → 19 vs 11mo', 'PMID 34638392'],
-        ['OS (weighted)', '≥120 Gy', 'PMID 40925975'],
-        ['WL NTAD', '<40 Gy', 'Strigari 2010'],
+      unilobar: [
+        ['Tumor dose', '>250 Gy', 'PPT'],
+        ['Normal tissue AD', '40~70 Gy', 'PPT'],
+        ['MIRD model', '150 Gy 이상 목표', 'PPT'],
+        ['비종양선량에 초점', '', 'PPT notes'],
         ['Lung', '<15 Gy/session', 'Korean guideline'],
       ],
       bilobar: [
         ['Tumor dose', '>100 Gy', 'PPT'],
         ['Normal tissue AD', '<40 Gy', 'PPT'],
-        ['WL NTAD (엄격)', '<40 Gy', 'Strigari 2010'],
         ['Lung', '<15 Gy/session', 'Korean guideline'],
       ],
       pvt: [
         ['Tumor dose', '>100 Gy', 'PPT'],
-        ['NTAD CPS A', '<70 Gy', 'PPT'],
+        ['NTAD CPS A', '>70 Gy', 'PPT'],
         ['NTAD CPS B', '40~70 Gy', 'PPT'],
         ['Lung', '<15 Gy/session', 'Korean guideline'],
       ],
     },
     glass: {
       segmentectomy: [
-        ['Perfused dose', '≥400 Gy', 'LEGACY/2025 EJNMMI'],
+        ['Perfused dose', '≥400 Gy', 'LEGACY/PPT'],
         ['Complete necrosis', '400 Gy (perfused)', 'LEGACY'],
-        ['Caudate lobe', '~596 Gy → 100% CR', 'PMID 36028573'],
-        ['Normal tissue', 'Ablation intent (제한 없음)', ''],
+        ['Model', 'Single compartment (MIRD) enough', 'PPT'],
+        ['Curative intent', 'Late 1st week or early 2nd week', 'PPT'],
         ['Lung (M/F)', '<25/<20 Gy', 'Korean guideline'],
       ],
       lobectomy: [
-        ['Tumor dose', '>205 Gy, ideally >250 Gy', 'DOSISPHERE-01'],
-        ['NTAD', '<120 Gy', '2022 EJNMMI consensus'],
-        ['Hepatic reserve <30%', 'NTAD >100 Gy → G3 독성', '2022 consensus'],
+        ['Tumor dose (Partition)', '>205 Gy, ideally >250 Gy', 'DOSISPHERE/PPT'],
+        ['Tumor dose (MIRD)', '>150 Gy', 'PPT'],
+        ['NTAD', '<120 Gy', 'PPT'],
+        ['Perfused NTAD', '88 Gy', 'PPT'],
+        ['용도', "Bridging to LT", 'PPT'],
         ['Lung (M/F)', '<25/<20 Gy', 'Korean guideline'],
       ],
-      hcc: [
-        ['OR threshold', '≥290 Gy (mean tumor dose)', 'Vouche 2023, JVIR'],
-        ['CR threshold', '≥481 Gy', 'Vouche 2023, JVIR'],
-        ['Personalized', '>205 Gy (ideally >250)', 'DOSISPHERE-01'],
-        ['Normal tissue (whole liver)', '<75 Gy', '2025 Expert'],
-        ['WL NTAD', 'TD50 52 Gy', 'Strigari 2010'],
+      largeHCC: [
+        ['Tumor dose', '>205 Gy (preferably 250 Gy)', 'PPT'],
+        ['Normal tissue AD', '<120 Gy', 'PPT'],
+        ['Hepatic reserve', '>30% 필요', 'PPT'],
+        ['Normal tissue AD (wide)', '<40~70 Gy', 'PPT'],
+        ['Radiation major hepatectomy', 'Perfused AD >200, lung limiting, split ≥4wk', 'PPT'],
+        ['Lung (M/F)', '<25/<20 Gy', 'Korean guideline'],
       ],
-      crclm: [
-        ['Tumor dose', '150~200 Gy', '2025 Expert Committee'],
-        ['NTAD', '<75 Gy', '2025 Expert'],
+      unilobar: [
+        ['Tumor dose', '>205 Gy (ideally 250 Gy)', 'PPT'],
+        ['Normal tissue AD CPS A', '<100 Gy', 'PPT'],
+        ['Normal tissue AD CPS B', '<70 Gy', 'PPT'],
+        ['MIRD model', '150 Gy 이상 목표', 'PPT'],
         ['Lung (M/F)', '<25/<20 Gy', 'Korean guideline'],
       ],
       bilobar: [
-        ['Tumor dose', '>205 Gy (ideally 250)', 'DOSISPHERE-01'],
-        ['NTAD CPS A', '40~70 Gy', '2022 EJNMMI'],
+        ['Tumor dose', '>205 Gy (ideally 250 Gy)', 'PPT'],
+        ['Normal tissue AD CPS A', '40~70 Gy', 'PPT'],
         ['Lung (M/F)', '<25/<20 Gy', 'Korean guideline'],
       ],
       pvt: [
-        ['Tumor dose', '>205 Gy (ideally 250)', 'PPT'],
-        ['NTAD CPS A', '<120 Gy', '2022 EJNMMI'],
-        ['NTAD CPS B', '<70 Gy', '2022 EJNMMI'],
+        ['Tumor dose', '>205 Gy (ideally 250 Gy)', 'PPT'],
+        ['NTAD', '<120 Gy', 'PPT'],
+        ['NTAD CPS B', '<70 Gy', 'PPT'],
         ['Lung (M/F)', '<25/<20 Gy', 'Korean guideline'],
       ],
     }
@@ -517,8 +523,8 @@ function init() {
     const slider = document.getElementById('targetDoseSlider');
     const doseVal = document.getElementById('targetDoseValue');
     const recommended = {
-      resin: { segmentectomy: 300, lobectomy: 250, hcc: 250, crclm: 120, bilobar: 150, pvt: 150 },
-      glass: { segmentectomy: 400, lobectomy: 250, hcc: 290, crclm: 200, bilobar: 250, pvt: 250 },
+      resin: { segmentectomy: 300, lobectomy: 250, largeHCC: 150, unilobar: 250, bilobar: 150, pvt: 150 },
+      glass: { segmentectomy: 400, lobectomy: 250, largeHCC: 250, unilobar: 250, bilobar: 250, pvt: 250 },
     };
     const rec = recommended[micro]?.[currentScenario] || 250;
     slider.value = rec;
