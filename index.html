@@ -364,16 +364,42 @@
           </div>
         </div>
 
-        <!-- Custom canvas viewer + slice scroll -->
+        <!-- Custom multi-viewport (M1.4): axial / sagittal / coronal with cross-hair sync -->
         <div class="card">
-          <div style="position:relative;background:#000;border-radius:6px;overflow:hidden">
-            <canvas id="voxelCanvas" width="512" height="512" style="display:block;width:100%;max-width:512px;margin:0 auto;cursor:crosshair"></canvas>
-            <canvas id="voxelOvlCanvas" width="512" height="512" style="display:block;position:absolute;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:512px;pointer-events:none"></canvas>
+          <div class="voxel-grid">
+            <div class="voxel-vp" data-axis="axial">
+              <div class="voxel-vp-label">Axial (k)</div>
+              <div class="voxel-vp-canvases">
+                <canvas class="vp-base" id="vpAxialBase" width="512" height="512"></canvas>
+                <canvas class="vp-ovl" id="vpAxialOvl" width="512" height="512"></canvas>
+                <canvas class="vp-cross" id="vpAxialCross" width="512" height="512"></canvas>
+              </div>
+              <input type="range" class="vp-slider" id="sliceK" min="0" max="0" value="0">
+              <div class="vp-info"><span id="kVal" class="mono">0/0</span></div>
+            </div>
+            <div class="voxel-vp" data-axis="sagittal">
+              <div class="voxel-vp-label">Sagittal (i)</div>
+              <div class="voxel-vp-canvases">
+                <canvas class="vp-base" id="vpSagBase" width="512" height="512"></canvas>
+                <canvas class="vp-ovl" id="vpSagOvl" width="512" height="512"></canvas>
+                <canvas class="vp-cross" id="vpSagCross" width="512" height="512"></canvas>
+              </div>
+              <input type="range" class="vp-slider" id="sliceI" min="0" max="0" value="0">
+              <div class="vp-info"><span id="iVal" class="mono">0/0</span></div>
+            </div>
+            <div class="voxel-vp" data-axis="coronal">
+              <div class="voxel-vp-label">Coronal (j)</div>
+              <div class="voxel-vp-canvases">
+                <canvas class="vp-base" id="vpCorBase" width="512" height="512"></canvas>
+                <canvas class="vp-ovl" id="vpCorOvl" width="512" height="512"></canvas>
+                <canvas class="vp-cross" id="vpCorCross" width="512" height="512"></canvas>
+              </div>
+              <input type="range" class="vp-slider" id="sliceJ" min="0" max="0" value="0">
+              <div class="vp-info"><span id="jVal" class="mono">0/0</span></div>
+            </div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;margin-top:8px">
-            <span style="color:var(--dim)">Slice</span>
-            <input type="range" id="voxelSlice" min="0" max="0" value="0" style="flex:1;min-width:120px">
-            <span id="voxelSliceVal" style="font-family:monospace">0/0</span>
+          <div style="font-size:10px;color:var(--dim);margin-top:6px">
+            클릭 → cross-hair 동기화. 휠 → 해당 축 슬라이스 스크롤. landmark 모드 ON시 클릭 = landmark 추가.
           </div>
         </div>
 

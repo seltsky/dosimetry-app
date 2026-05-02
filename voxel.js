@@ -12,24 +12,25 @@
 // =====================================================================
 const state = {
   loaded: false,
-  seriesByUid: new Map(),       // seriesUID → { modality, files, label }
-  baseUid: null,                 // diagnostic base series uid
-  ovlUid: null,                  // overlay series uid
-  baseVolume: null,              // Volume {data, dims, spacing, ijkToRas, modality, range}
+  seriesByUid: new Map(),
+  baseUid: null,
+  ovlUid: null,
+  baseVolume: null,
   ovlVolume: null,
-  resampledOvl: null,            // overlay resampled to base grid
-  baseSlice: 0,                  // current base k-index
+  resampledOvl: null,
+  cursorBase: { i: 0, j: 0, k: 0 },     // cross-hair in base voxel space
+  cursorOvl:  { i: 0, j: 0, k: 0 },     // cross-hair in overlay voxel space
+  viewMode: 'base',                      // 'base' shows base+overlay; 'ovl' shows ovl alone
   windowCenter: 40,
   windowWidth: 400,
-  ovlCenter: null,               // auto-determined from data
+  ovlCenter: null,
   ovlWidth: null,
   opacity: 0.5,
   colormap: 'hot',
   landmarkMode: false,
-  landmarkTarget: 'base',        // 'base' or 'ovl' — next click target
-  landmarks: [],                 // [{srcMm, tgtMm, label, clicked: {base?, ovl?}}]
-  pendingLandmark: null,         // { base?: voxel, ovl?: voxel, slice }
-  registration: null,            // {R, t, scale, transform4x4, residual_rms_mm}
+  landmarkTarget: 'base',
+  landmarks: [],
+  registration: null,
   phiFindings: [],
 };
 
@@ -373,68 +374,106 @@ function buildColormap(name) {
 }
 
 // =====================================================================
-// Render a single axial slice of base volume (grayscale with windowing)
+// Slice geometry: per-axis canvas dimensions + voxel access
+// axis = 'axial' | 'sagittal' | 'coronal'
+//   axial    fixes k, displays (i = canvas x, j = canvas y)
+//   sagittal fixes i, displays (j = canvas x, k = canvas y)
+//   coronal  fixes j, displays (i = canvas x, k = canvas y)
 // =====================================================================
-function renderBaseSlice(canvas, vol, k, center, width) {
+function viewportDims(vol, axis) {
+  const [W, H, D] = vol.dims;
+  if (axis === 'axial')    return [W, H];
+  if (axis === 'sagittal') return [H, D];
+  return [W, D]; // coronal
+}
+
+function voxelAt(vol, axis, sliceIdx, cx, cy) {
+  const [W, H, D] = vol.dims;
+  if (axis === 'axial')    return vol.data[sliceIdx * W * H + cy * W + cx];
+  if (axis === 'sagittal') return vol.data[cy * W * H + cx * W + sliceIdx];
+  return vol.data[cy * W * H + sliceIdx * W + cx]; // coronal
+}
+
+// Map (axis, sliceIdx, canvas x, canvas y) → volume voxel index (i, j, k)
+function canvasToIjk(axis, sliceIdx, cx, cy) {
+  if (axis === 'axial')    return [cx, cy, sliceIdx];
+  if (axis === 'sagittal') return [sliceIdx, cx, cy];
+  return [cx, sliceIdx, cy]; // coronal
+}
+
+// Map (axis, ijk) → canvas (x, y) for cross-hair drawing
+function ijkToCanvas(axis, i, j, k) {
+  if (axis === 'axial')    return [i, j];
+  if (axis === 'sagittal') return [j, k];
+  return [i, k]; // coronal
+}
+
+function renderBaseToCanvas(canvas, vol, axis, sliceIdx, center, width) {
   const ctx = canvas.getContext('2d');
-  const [cols, rows] = vol.dims;
-  if (canvas.width !== cols || canvas.height !== rows) {
-    canvas.width = cols; canvas.height = rows;
+  const [cw, ch] = viewportDims(vol, axis);
+  if (canvas.width !== cw || canvas.height !== ch) {
+    canvas.width = cw; canvas.height = ch;
   }
-  const img = ctx.createImageData(cols, rows);
+  const img = ctx.createImageData(cw, ch);
   const lo = center - width / 2;
-  const hi = center + width / 2;
-  const inv = 255 / Math.max(1e-6, hi - lo);
-  const off = k * cols * rows;
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      const v = vol.data[off + y * cols + x];
+  const inv = 255 / Math.max(1e-6, width);
+  for (let cy = 0; cy < ch; cy++) {
+    for (let cx = 0; cx < cw; cx++) {
+      const v = voxelAt(vol, axis, sliceIdx, cx, cy);
       let g = (v - lo) * inv;
       if (g < 0) g = 0; else if (g > 255) g = 255;
-      const i4 = (y * cols + x) * 4;
-      img.data[i4]   = g;
-      img.data[i4+1] = g;
-      img.data[i4+2] = g;
-      img.data[i4+3] = 255;
+      const i4 = (cy * cw + cx) * 4;
+      img.data[i4] = g; img.data[i4+1] = g; img.data[i4+2] = g; img.data[i4+3] = 255;
     }
   }
   ctx.putImageData(img, 0, 0);
 }
 
-function renderOverlaySlice(canvas, ovl, baseVol, k, center, width, opacity, lut) {
+function renderOvlToCanvas(canvas, ovl, baseVol, axis, sliceIdx, center, width, opacity, lut) {
   const ctx = canvas.getContext('2d');
-  const [cols, rows] = baseVol.dims;
-  if (canvas.width !== cols || canvas.height !== rows) {
-    canvas.width = cols; canvas.height = rows;
+  if (!ovl) { ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
+  // Overlay must be on the base grid (resampled). Use base dims for canvas.
+  const [cw, ch] = viewportDims(baseVol, axis);
+  if (canvas.width !== cw || canvas.height !== ch) {
+    canvas.width = cw; canvas.height = ch;
   }
-  const img = ctx.createImageData(cols, rows);
-  if (!ovl) {
-    ctx.clearRect(0, 0, cols, rows);
-    return;
-  }
+  const img = ctx.createImageData(cw, ch);
   const lo = center;
   const hi = Math.max(lo + 1e-6, lo + width);
-  const off = k * cols * rows;
-  const data = ovl.data;
   const alpha = Math.round(opacity * 255);
-  for (let y = 0; y < rows; y++) {
-    for (let x = 0; x < cols; x++) {
-      const v = data[off + y * cols + x];
-      const i4 = (y * cols + x) * 4;
-      if (v <= lo) {
-        img.data[i4+3] = 0;
-        continue;
-      }
+  for (let cy = 0; cy < ch; cy++) {
+    for (let cx = 0; cx < cw; cx++) {
+      const v = voxelAt(ovl, axis, sliceIdx, cx, cy);
+      const i4 = (cy * cw + cx) * 4;
+      if (v <= lo) { img.data[i4+3] = 0; continue; }
       let t = (v - lo) / (hi - lo);
       if (t < 0) t = 0; else if (t > 1) t = 1;
       const idx = Math.round(t * 255) * 3;
-      img.data[i4]   = lut[idx];
+      img.data[i4] = lut[idx];
       img.data[i4+1] = lut[idx+1];
       img.data[i4+2] = lut[idx+2];
       img.data[i4+3] = alpha;
     }
   }
   ctx.putImageData(img, 0, 0);
+}
+
+// Draw cross-hair lines + landmark markers + slice indicator on top canvas
+function renderCrossToCanvas(canvas, vol, axis, cursor) {
+  const [cw, ch] = viewportDims(vol, axis);
+  if (canvas.width !== cw || canvas.height !== ch) {
+    canvas.width = cw; canvas.height = ch;
+  }
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, cw, ch);
+  // Cross-hair: vertical at "horizontal cursor coord", horizontal at "vertical cursor coord"
+  const [hx, hy] = ijkToCanvas(axis, cursor.i, cursor.j, cursor.k);
+  ctx.strokeStyle = 'rgba(255, 215, 0, 0.55)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(hx + 0.5, 0); ctx.lineTo(hx + 0.5, ch);
+  ctx.moveTo(0, hy + 0.5); ctx.lineTo(cw, hy + 0.5);
+  ctx.stroke();
 }
 
 // =====================================================================
@@ -605,12 +644,14 @@ async function applyRoles() {
     state.ovlWidth = Math.max(1, mx - state.ovlCenter);
   }
 
-  // Set slice slider
+  // Initialize cross-hair cursors at center
   if (state.baseVolume) {
-    const slider = document.getElementById('voxelSlice');
-    slider.max = state.baseVolume.dims[2] - 1;
-    state.baseSlice = Math.floor(state.baseVolume.dims[2] / 2);
-    slider.value = state.baseSlice;
+    const [W, H, D] = state.baseVolume.dims;
+    state.cursorBase = { i: W >> 1, j: H >> 1, k: D >> 1 };
+  }
+  if (state.ovlVolume) {
+    const [W, H, D] = state.ovlVolume.dims;
+    state.cursorOvl = { i: W >> 1, j: H >> 1, k: D >> 1 };
   }
   setText('voxelSeriesInfo',
     `Base: ${state.baseVolume?.modality} ${state.baseVolume?.dims.join('×')}` +
@@ -619,105 +660,169 @@ async function applyRoles() {
 }
 
 // =====================================================================
-// Redraw loop
+// Redraw loop — multi-viewport (M1.4)
 // =====================================================================
 let _colormapName = 'hot';
 let _colormapLut = buildColormap('hot');
 
+const VIEWPORTS = [
+  { axis: 'axial',    base: 'vpAxialBase', ovl: 'vpAxialOvl', cross: 'vpAxialCross', sliceIdx: (c) => c.k },
+  { axis: 'sagittal', base: 'vpSagBase',   ovl: 'vpSagOvl',   cross: 'vpSagCross',   sliceIdx: (c) => c.i },
+  { axis: 'coronal',  base: 'vpCorBase',   ovl: 'vpCorOvl',   cross: 'vpCorCross',   sliceIdx: (c) => c.j },
+];
+
+function activeVolume() {
+  return state.viewMode === 'ovl' ? state.ovlVolume : state.baseVolume;
+}
+function activeCursor() {
+  return state.viewMode === 'ovl' ? state.cursorOvl : state.cursorBase;
+}
+
 function redraw() {
-  const canvas = document.getElementById('voxelCanvas');
-  const ovlCanvas = document.getElementById('voxelOvlCanvas');
-  if (!state.baseVolume || !canvas || !ovlCanvas) return;
-  renderBaseSlice(canvas, state.baseVolume, state.baseSlice,
-    state.windowCenter, state.windowWidth);
+  const vol = activeVolume();
+  if (!vol) return;
+  const cursor = activeCursor();
 
   if (state.colormap !== _colormapName) {
     _colormapName = state.colormap;
     _colormapLut = buildColormap(state.colormap);
   }
-  const overlayVol = state.resampledOvl || (
-    state.registration ? null : state.ovlVolume   // before registration: show on base grid only if dims match
-  );
-  if (overlayVol && overlayVol.dims.join(',') === state.baseVolume.dims.join(',')) {
-    renderOverlaySlice(ovlCanvas, overlayVol, state.baseVolume, state.baseSlice,
-      state.ovlCenter, state.ovlWidth, state.opacity, _colormapLut);
-  } else {
-    const ctx = ovlCanvas.getContext('2d');
-    ctx.clearRect(0, 0, ovlCanvas.width, ovlCanvas.height);
+
+  // Overlay only when in 'base' viewMode and resampled overlay aligned to base
+  const overlayVol = (state.viewMode === 'base' && state.resampledOvl
+                      && state.resampledOvl.dims.join(',') === state.baseVolume.dims.join(','))
+                     ? state.resampledOvl : null;
+
+  for (const vp of VIEWPORTS) {
+    const baseCv = document.getElementById(vp.base);
+    const ovlCv = document.getElementById(vp.ovl);
+    const crCv = document.getElementById(vp.cross);
+    if (!baseCv || !ovlCv || !crCv) continue;
+    const idx = clampSlice(vp.sliceIdx(cursor), vp.axis, vol);
+    renderBaseToCanvas(baseCv, vol, vp.axis, idx, state.windowCenter, state.windowWidth);
+    if (overlayVol) {
+      renderOvlToCanvas(ovlCv, overlayVol, state.baseVolume, vp.axis, idx,
+        state.ovlCenter, state.ovlWidth, state.opacity, _colormapLut);
+    } else {
+      const ctx = ovlCv.getContext('2d');
+      ctx.clearRect(0, 0, ovlCv.width, ovlCv.height);
+    }
+    renderCrossToCanvas(crCv, vol, vp.axis, cursor);
+    drawLandmarkMarkersOnViewport(crCv, vp.axis, idx, cursor, vol);
   }
-  drawLandmarkMarkers();
-  setText('voxelSliceVal', `${state.baseSlice + 1}/${state.baseVolume.dims[2]}`);
+
+  // Slider values
+  const dims = vol.dims;
+  setText('iVal', `${cursor.i + 1}/${dims[0]}`);
+  setText('jVal', `${cursor.j + 1}/${dims[1]}`);
+  setText('kVal', `${cursor.k + 1}/${dims[2]}`);
+  const sI = document.getElementById('sliceI'), sJ = document.getElementById('sliceJ'), sK = document.getElementById('sliceK');
+  if (sI && +sI.max !== dims[0] - 1) sI.max = dims[0] - 1;
+  if (sJ && +sJ.max !== dims[1] - 1) sJ.max = dims[1] - 1;
+  if (sK && +sK.max !== dims[2] - 1) sK.max = dims[2] - 1;
+  if (sI) sI.value = cursor.i;
+  if (sJ) sJ.value = cursor.j;
+  if (sK) sK.value = cursor.k;
+}
+
+function clampSlice(idx, axis, vol) {
+  const [W, H, D] = vol.dims;
+  let max;
+  if (axis === 'axial') max = D - 1;
+  else if (axis === 'sagittal') max = W - 1;
+  else max = H - 1;
+  return Math.max(0, Math.min(max, idx));
 }
 
 // =====================================================================
-// Landmark markers overlay
+// Landmark markers per viewport
 // =====================================================================
-function drawLandmarkMarkers() {
-  // Draw landmark dots on the BASE canvas overlay (we re-use ovl canvas after
-  // its content is already painted, layering on top via 2D ctx).
-  const ovlCanvas = document.getElementById('voxelOvlCanvas');
-  if (!ovlCanvas || !state.baseVolume) return;
-  const ctx = ovlCanvas.getContext('2d');
-  // We assume coordinates are in base voxel grid. The current displayed slice
-  // is state.baseSlice. Markers within ±1 slice highlight; others dim.
-  const k0 = state.baseSlice;
-  const drawDot = (i, j, kdiff, color) => {
-    const r = kdiff === 0 ? 5 : 3;
+function drawLandmarkMarkersOnViewport(crCanvas, axis, sliceIdx, cursor, vol) {
+  if (!crCanvas) return;
+  const ctx = crCanvas.getContext('2d');
+  const sliceFor = (axisN, ijk) => {
+    if (axisN === 'axial') return ijk[2];
+    if (axisN === 'sagittal') return ijk[0];
+    return ijk[1];
+  };
+  const drawDot = (canvasX, canvasY, sliceDiff, color, label) => {
+    const r = sliceDiff === 0 ? 5 : 3;
     ctx.beginPath();
-    ctx.arc(i, j, r, 0, Math.PI*2);
+    ctx.arc(canvasX, canvasY, r, 0, Math.PI*2);
     ctx.fillStyle = color;
-    ctx.globalAlpha = kdiff === 0 ? 1 : 0.4;
+    ctx.globalAlpha = sliceDiff === 0 ? 1 : 0.35;
     ctx.fill();
+    if (sliceDiff === 0 && label) {
+      ctx.fillStyle = color;
+      ctx.font = 'bold 11px monospace';
+      ctx.globalAlpha = 1;
+      ctx.fillText(label, canvasX + 6, canvasY - 6);
+    }
     ctx.globalAlpha = 1;
   };
-  // Pending click markers
   state.landmarks.forEach((lm, idx) => {
-    if (lm.baseVoxel) {
-      const kd = lm.baseVoxel[2] - k0;
-      drawDot(lm.baseVoxel[0], lm.baseVoxel[1], kd, '#00ffff');
-      if (kd === 0) {
-        ctx.fillStyle = '#00ffff';
-        ctx.font = 'bold 11px monospace';
-        ctx.fillText(`B${idx+1}`, lm.baseVoxel[0]+6, lm.baseVoxel[1]-6);
-      }
+    // Base landmarks display when viewMode === 'base'
+    if (state.viewMode === 'base' && lm.baseVoxel) {
+      const ijk = lm.baseVoxel;
+      const cx = ijkToCanvas(axis, ...ijk);
+      drawDot(cx[0], cx[1], sliceFor(axis, ijk) - sliceIdx, '#00ffff', `B${idx+1}`);
     }
-    if (lm.ovlVoxel && state.ovlVolume) {
-      // We don't have a separate ovl viewport, so we project ovl voxel→world→
-      // base voxel for display ONLY if registration exists. Otherwise skip.
-      if (state.registration) {
-        const ovlWorld = ijkToWorldMm(state.ovlVolume, ...lm.ovlVoxel);
-        const baseWorld = affineMul(state.registration.transform4x4, ovlWorld);
-        const rasToIjkBase = inverseAffine4(state.baseVolume.ijkToRas);
-        if (rasToIjkBase) {
-          const bv = affineMul(rasToIjkBase, baseWorld);
-          const kd = Math.round(bv[2]) - k0;
-          drawDot(Math.round(bv[0]), Math.round(bv[1]), kd, '#ff66ff');
-        }
-      }
+    // Overlay landmarks display when viewMode === 'ovl'
+    if (state.viewMode === 'ovl' && lm.ovlVoxel) {
+      const ijk = lm.ovlVoxel;
+      const cx = ijkToCanvas(axis, ...ijk);
+      drawDot(cx[0], cx[1], sliceFor(axis, ijk) - sliceIdx, '#ff66ff', `O${idx+1}`);
     }
   });
 }
 
 // =====================================================================
-// Click handler — convert canvas click → base voxel
+// Click handlers — per viewport
 // =====================================================================
-function setupCanvasClick() {
-  const canvas = document.getElementById('voxelCanvas');
-  if (!canvas) return;
-  canvas.addEventListener('click', (e) => {
-    if (!state.landmarkMode || !state.baseVolume) return;
-    const rect = canvas.getBoundingClientRect();
-    const sx = canvas.width / rect.width;
-    const sy = canvas.height / rect.height;
-    const i = Math.round((e.clientX - rect.left) * sx);
-    const j = Math.round((e.clientY - rect.top) * sy);
-    const k = state.baseSlice;
-    addLandmarkClick(state.landmarkTarget, [i, j, k]);
-  });
+function setupViewportInteraction() {
+  for (const vp of VIEWPORTS) {
+    const wrap = document.getElementById(vp.cross)?.parentElement;
+    if (!wrap) continue;
+    wrap.addEventListener('click', (e) => onViewportClick(e, vp));
+    wrap.addEventListener('wheel', (e) => onViewportWheel(e, vp), { passive: false });
+  }
+}
+
+function onViewportClick(e, vp) {
+  const vol = activeVolume();
+  if (!vol) return;
+  const baseCv = document.getElementById(vp.base);
+  if (!baseCv) return;
+  const rect = baseCv.getBoundingClientRect();
+  const sx = baseCv.width / rect.width;
+  const sy = baseCv.height / rect.height;
+  const cx = Math.max(0, Math.min(baseCv.width - 1, Math.round((e.clientX - rect.left) * sx)));
+  const cy = Math.max(0, Math.min(baseCv.height - 1, Math.round((e.clientY - rect.top) * sy)));
+  const cursor = activeCursor();
+  const sliceIdx = vp.sliceIdx(cursor);
+  const ijk = canvasToIjk(vp.axis, sliceIdx, cx, cy);
+  if (state.landmarkMode) {
+    addLandmarkClick(state.landmarkTarget, ijk);
+  } else {
+    cursor.i = ijk[0]; cursor.j = ijk[1]; cursor.k = ijk[2];
+    redraw();
+  }
+}
+
+function onViewportWheel(e, vp) {
+  const vol = activeVolume();
+  if (!vol) return;
+  e.preventDefault();
+  const dir = Math.sign(e.deltaY);
+  const cursor = activeCursor();
+  const [W, H, D] = vol.dims;
+  if (vp.axis === 'axial')         cursor.k = Math.max(0, Math.min(D-1, cursor.k + dir));
+  else if (vp.axis === 'sagittal') cursor.i = Math.max(0, Math.min(W-1, cursor.i + dir));
+  else                             cursor.j = Math.max(0, Math.min(H-1, cursor.j + dir));
+  redraw();
 }
 
 function addLandmarkClick(target, voxel) {
-  // Find an open landmark slot for this target
   let slot = state.landmarks.find(lm =>
     (target === 'base' && !lm.baseVoxel) || (target === 'ovl' && !lm.ovlVoxel));
   if (!slot) {
@@ -813,6 +918,9 @@ function resetViewer() {
   state.registration = null;
   state.landmarks = [];
   state.phiFindings = [];
+  state.cursorBase = { i: 0, j: 0, k: 0 };
+  state.cursorOvl = { i: 0, j: 0, k: 0 };
+  state.viewMode = 'base';
   setHidden('voxelOnboarding', false);
   setHidden('voxelViewerWrap', true);
   setText('voxelSeriesInfo', '-');
@@ -891,13 +999,15 @@ function init() {
     });
   });
 
-  const sliceSlider = document.getElementById('voxelSlice');
-  sliceSlider?.addEventListener('input', () => {
-    state.baseSlice = parseInt(sliceSlider.value, 10);
-    redraw();
-  });
+  // Per-axis sliders
+  const sliceI = document.getElementById('sliceI');
+  const sliceJ = document.getElementById('sliceJ');
+  const sliceK = document.getElementById('sliceK');
+  sliceI?.addEventListener('input', () => { activeCursor().i = parseInt(sliceI.value, 10); redraw(); });
+  sliceJ?.addEventListener('input', () => { activeCursor().j = parseInt(sliceJ.value, 10); redraw(); });
+  sliceK?.addEventListener('input', () => { activeCursor().k = parseInt(sliceK.value, 10); redraw(); });
 
-  // Landmark mode
+  // Landmark mode + view-mode switching
   const btnLM = document.getElementById('voxelLandmarkMode');
   btnLM?.addEventListener('click', () => {
     state.landmarkMode = !state.landmarkMode;
@@ -906,31 +1016,27 @@ function init() {
   });
   document.getElementById('voxelLandmarkBase')?.addEventListener('click', () => {
     state.landmarkTarget = 'base';
+    state.viewMode = 'base';
     document.getElementById('voxelLandmarkBase').style.background = '#36a';
     document.getElementById('voxelLandmarkOvl').style.background = '';
+    redraw();
   });
   document.getElementById('voxelLandmarkOvl')?.addEventListener('click', () => {
+    if (!state.ovlVolume) {
+      setText('voxelRegStatus', '⚠ Overlay 시리즈가 로드되지 않았습니다');
+      return;
+    }
     state.landmarkTarget = 'ovl';
+    state.viewMode = 'ovl';
     document.getElementById('voxelLandmarkOvl').style.background = '#36a';
     document.getElementById('voxelLandmarkBase').style.background = '';
+    redraw();
   });
   document.getElementById('voxelLandmarkClear')?.addEventListener('click', clearLandmarks);
   document.getElementById('voxelComputeReg')?.addEventListener('click', computeRegistration);
 
-  setupCanvasClick();
+  setupViewportInteraction();
   refreshLandmarkList();
-
-  // Mouse wheel: scroll slice
-  const canvas = document.getElementById('voxelCanvas');
-  canvas?.addEventListener('wheel', (e) => {
-    if (!state.baseVolume) return;
-    e.preventDefault();
-    const dir = Math.sign(e.deltaY);
-    const max = state.baseVolume.dims[2] - 1;
-    state.baseSlice = Math.max(0, Math.min(max, state.baseSlice + dir));
-    document.getElementById('voxelSlice').value = state.baseSlice;
-    redraw();
-  }, { passive: false });
 }
 
 function traverseEntry(entry, files) {
