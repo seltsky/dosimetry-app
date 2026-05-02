@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seltsky.github.io/dosimetry-app/schemas/dosimetry.case.v1.json",
+  "title": "Dosimetry Case (SPEC-DOSI-VOXEL-SHARED-001 v1.0)",
+  "description": "Cross-product case JSON shared by SPEC-DOSI-VOXEL-WEB-001 and SPEC-DOSI-VOXEL-SLICER-001. Contains no DICOM pixel data and no PHI.",
+  "type": "object",
+  "required": ["schema_version", "case_id", "meta", "calibration", "rois", "provenance"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Bumped on additive change (1.x) or breaking change (2.0)."
+    },
+    "case_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9_\\-]+$",
+      "description": "User-defined case identifier. MUST NOT contain PHI."
+    },
+    "meta": {
+      "type": "object",
+      "required": ["created_at", "microsphere"],
+      "additionalProperties": false,
+      "properties": {
+        "created_at": { "type": "string", "format": "date-time" },
+        "microsphere": { "enum": ["resin", "glass"] },
+        "intent": { "type": "string", "maxLength": 256 },
+        "scenario": { "type": "string", "maxLength": 64 },
+        "locale": { "enum": ["ko", "en", "mixed"] }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "required": ["prescribed_activity_gbq", "lsf_pct"],
+      "additionalProperties": false,
+      "properties": {
+        "prescribed_activity_gbq": { "type": "number", "exclusiveMinimum": 0 },
+        "acquisition_timestamp": { "type": ["string", "null"], "format": "date-time" },
+        "reference_timestamp": { "type": ["string", "null"], "format": "date-time" },
+        "calibration_factor_mbq_per_count": {
+          "type": ["number", "null"],
+          "exclusiveMinimum": 0,
+          "description": "When null, results MUST be in relative units."
+        },
+        "lsf_pct": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "rois": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 14,
+      "items": { "$ref": "#/$defs/roi" }
+    },
+    "method1_results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/method1Result" }
+    },
+    "method2_results": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/method2Result" }
+    },
+    "dvh": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/dvhSeries" }
+    },
+    "registration": { "$ref": "#/$defs/registration" },
+    "provenance": { "$ref": "#/$defs/provenance" },
+    "quality_flags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Optional advisory flags (e.g., \"low_calibration_confidence\", \"sparse_spect_counts\", \"high_residual_rms\")."
+    }
+  },
+  "$defs": {
+    "roiLabel": {
+      "type": "string",
+      "pattern": "^(Liver|Perfused|Lung|Tumor[1-9]|Tumor10)$"
+    },
+    "roi": {
+      "type": "object",
+      "required": ["label", "voxel_count", "voxel_volume_cc", "mean_count", "density_g_per_cc"],
+      "additionalProperties": false,
+      "properties": {
+        "label": { "$ref": "#/$defs/roiLabel" },
+        "voxel_count": { "type": "integer", "minimum": 0 },
+        "voxel_volume_cc": { "type": "number", "exclusiveMinimum": 0 },
+        "mean_count": { "type": "number", "minimum": 0 },
+        "sum_count": { "type": "number", "minimum": 0 },
+        "max_count": { "type": "number", "minimum": 0 },
+        "density_g_per_cc": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "units": { "enum": ["gy", "relative"] },
+    "method1Result": {
+      "type": "object",
+      "required": ["roi_label", "units"],
+      "additionalProperties": false,
+      "properties": {
+        "roi_label": { "$ref": "#/$defs/roiLabel" },
+        "units": { "$ref": "#/$defs/units" },
+        "dose_gy": { "type": "number" },
+        "dose_relative": { "type": "number" },
+        "tn_ratio": { "type": "number", "minimum": 0 },
+        "v_t_cc": { "type": "number", "minimum": 0 },
+        "v_n_cc": { "type": "number", "minimum": 0 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "units": { "const": "gy" } } },
+          "then": { "required": ["dose_gy"] }
+        },
+        {
+          "if": { "properties": { "units": { "const": "relative" } } },
+          "then": { "required": ["dose_relative"] }
+        }
+      ]
+    },
+    "method2Result": {
+      "type": "object",
+      "required": ["roi_label", "units", "voxel_count"],
+      "additionalProperties": false,
+      "properties": {
+        "roi_label": { "$ref": "#/$defs/roiLabel" },
+        "units": { "$ref": "#/$defs/units" },
+        "voxel_count": { "type": "integer", "minimum": 0 },
+        "mean_gy": { "type": "number" },
+        "max_gy": { "type": "number" },
+        "d95_gy": { "type": "number" },
+        "d70_gy": { "type": "number" },
+        "mean_relative": { "type": "number" },
+        "max_relative": { "type": "number" },
+        "d95_relative": { "type": "number" },
+        "d70_relative": { "type": "number" }
+      }
+    },
+    "dvhSeries": {
+      "type": "object",
+      "required": ["roi_label", "units", "points"],
+      "additionalProperties": false,
+      "properties": {
+        "roi_label": { "$ref": "#/$defs/roiLabel" },
+        "units": { "$ref": "#/$defs/units" },
+        "points": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/dvhPoint" }
+        }
+      }
+    },
+    "dvhPoint": {
+      "type": "object",
+      "required": ["dose", "volume_pct"],
+      "additionalProperties": false,
+      "properties": {
+        "dose": { "type": "number", "minimum": 0 },
+        "volume_pct": { "type": "number", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "registration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["identity", "rigid", "similarity"] },
+        "landmarks": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/landmarkPair" }
+        },
+        "transform_4x4": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": { "type": "number" }
+          }
+        },
+        "scale": { "type": "number", "exclusiveMinimum": 0 },
+        "residual_rms_mm": { "type": "number", "minimum": 0 }
+      }
+    },
+    "landmarkPair": {
+      "type": "object",
+      "required": ["source_mm", "target_mm"],
+      "additionalProperties": false,
+      "properties": {
+        "source_mm": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "number" }
+        },
+        "target_mm": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "number" }
+        },
+        "label": { "type": "string", "maxLength": 64 }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["product", "product_version", "schema_version", "computation_timestamp"],
+      "additionalProperties": false,
+      "properties": {
+        "product": { "enum": ["dosimetry-app-web", "SlicerY90Dosimetry"] },
+        "product_version": { "type": "string" },
+        "schema_version": { "type": "string", "const": "1.0" },
+        "algorithm_version": { "type": "string" },
+        "computation_timestamp": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

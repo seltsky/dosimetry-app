@@ -21,6 +21,7 @@
       <button class="tab" data-tab="mird">MIRD</button>
       <button class="tab" data-tab="maa">MAA</button>
       <button class="tab" data-tab="simplicity">Simplicity</button>
+      <button class="tab" data-tab="voxel">Voxel</button>
       <button class="tab" data-tab="cases">케이스</button>
       <button class="tab" data-tab="refs">문헌</button>
     </nav>
@@ -81,7 +82,8 @@
         </table>
       </div>
 
-        <!-- 4-step table — Excel grid style -->
+      <!-- 4-step table — Excel grid style -->
+      <div class="card sheet-card">
         <table class="calc-table">
           <thead>
             <tr><th></th><th>Lung (Gy)</th><th>Normal (Gy)</th><th>Tumor (Gy)</th><th>Activity (GBq)</th></tr>
@@ -299,6 +301,112 @@
       <div id="simplicityCases"></div>
     </section>
 
+    <!-- ==================== VOXEL TAB (SPEC-DOSI-VOXEL-001) ==================== -->
+    <section id="tab-voxel" class="tab-content">
+      <div class="card">
+        <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">DICOM 기반 Voxel Dosimetry (검증·연구용)</div>
+        <p style="font-size:11px;color:var(--dim);margin:0 0 8px">SPECT/CT 또는 PET/CT를 로드하고 ROI를 그려 Method 1(ROI partition) + Method 2(voxel-based) 결과를 동시 산출합니다. 임상 결정 단독 사용 금지.</p>
+      </div>
+
+      <!-- Onboarding / drop zone -->
+      <div id="voxelOnboarding" class="card">
+        <div id="voxelDropZone" class="voxel-drop">
+          <div style="font-size:26px;line-height:1.2;margin-bottom:6px">📁</div>
+          <div style="font-weight:700;font-size:13px;margin-bottom:4px">DICOM 시리즈 로드</div>
+          <div style="font-size:11px;color:var(--dim);margin-bottom:10px">SPECT/CT, PET/CT, baseline CT 폴더 또는 파일을 드롭하세요</div>
+          <input type="file" id="voxelFileInput" multiple webkitdirectory directory style="display:none">
+          <button class="save-btn" id="voxelLoadBtn" style="width:auto;padding:8px 16px">파일 선택</button>
+          <div style="font-size:10px;color:var(--dim);margin-top:8px">⚠️ 익명화된 DICOM만 사용하세요. 모든 처리는 브라우저 내에서만 이뤄집니다.</div>
+        </div>
+      </div>
+
+      <!-- Active viewer (hidden until load) -->
+      <div id="voxelViewerWrap" style="display:none">
+        <div class="card">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px">
+            <strong style="color:var(--accent)">로드된 시리즈</strong>
+            <span id="voxelSeriesInfo" style="color:var(--dim)">-</span>
+            <button class="case-action-btn" id="voxelResetBtn" style="margin-left:auto">새로 로드</button>
+          </div>
+          <div id="voxelPhiWarn" class="report-phi-warn" style="display:none;margin-top:6px"></div>
+        </div>
+
+        <!-- Series role selector + overlay controls -->
+        <div class="card">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;margin-bottom:6px">
+            <strong>Diagnostic base</strong>
+            <select id="voxelBaseSelect" class="mini-select"></select>
+            <strong>Functional overlay</strong>
+            <select id="voxelOvlSelect" class="mini-select"></select>
+            <button class="case-action-btn" id="voxelApplyRoles">적용</button>
+          </div>
+          <div id="voxelFusedHint" style="font-size:11px;color:var(--dim);display:none"></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;margin-top:8px">
+            <strong>Overlay</strong>
+            <select id="voxelColormap" class="mini-select">
+              <option value="hot">hot</option>
+              <option value="jet">jet</option>
+              <option value="viridis">viridis</option>
+            </select>
+            <span style="color:var(--dim)">opacity</span>
+            <input type="range" id="voxelOpacity" min="0" max="100" value="50" style="flex:1;min-width:120px">
+            <span id="voxelOpacityVal">50%</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;margin-top:8px">
+            <strong>CT window</strong>
+            <span style="color:var(--dim)">center</span>
+            <input type="number" id="voxelWLcenter" value="40" step="10" style="width:70px">
+            <span style="color:var(--dim)">width</span>
+            <input type="number" id="voxelWLwidth" value="400" step="20" style="width:80px">
+            <button class="case-action-btn" data-preset="abdomen">복부 W400/40</button>
+            <button class="case-action-btn" data-preset="liver">간 W150/60</button>
+            <button class="case-action-btn" data-preset="lung">폐 W1500/-600</button>
+          </div>
+        </div>
+
+        <!-- Custom canvas viewer + slice scroll -->
+        <div class="card">
+          <div style="position:relative;background:#000;border-radius:6px;overflow:hidden">
+            <canvas id="voxelCanvas" width="512" height="512" style="display:block;width:100%;max-width:512px;margin:0 auto;cursor:crosshair"></canvas>
+            <canvas id="voxelOvlCanvas" width="512" height="512" style="display:block;position:absolute;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:512px;pointer-events:none"></canvas>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;margin-top:8px">
+            <span style="color:var(--dim)">Slice</span>
+            <input type="range" id="voxelSlice" min="0" max="0" value="0" style="flex:1;min-width:120px">
+            <span id="voxelSliceVal" style="font-family:monospace">0/0</span>
+          </div>
+        </div>
+
+        <!-- Landmark Registration Panel (M1.6) -->
+        <div class="card" id="voxelLandmarkCard">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;margin-bottom:6px">
+            <strong style="color:var(--accent)">Manual Landmark Registration</strong>
+            <span style="color:var(--dim);font-size:10px">3~10 점 클릭 (해부학 지점 권장)</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;margin-bottom:6px">
+            <button class="case-action-btn" id="voxelLandmarkMode">Landmark mode: OFF</button>
+            <span style="color:var(--dim)">Click target:</span>
+            <button class="case-action-btn" id="voxelLandmarkBase" data-target="base">Base (CT/MR)</button>
+            <button class="case-action-btn" id="voxelLandmarkOvl" data-target="ovl">Overlay (SPECT)</button>
+            <button class="case-action-btn" id="voxelLandmarkClear">Clear all</button>
+          </div>
+          <div id="voxelLandmarkList" style="font-size:11px;font-family:monospace;background:#0c1220;padding:6px;border-radius:4px;max-height:140px;overflow-y:auto"></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;margin-top:8px">
+            <select id="voxelRegMode" class="mini-select">
+              <option value="rigid">rigid (6 DoF)</option>
+              <option value="similarity">similarity (7 DoF, +scale)</option>
+            </select>
+            <button class="save-btn" id="voxelComputeReg" style="width:auto;padding:6px 14px">Compute Registration</button>
+          </div>
+          <div id="voxelRegStatus" style="font-size:11px;margin-top:8px"></div>
+        </div>
+
+        <div class="card" id="voxelPlaceholder">
+          <div style="font-size:11px;color:var(--dim)">ROI 도구 · Method 1·2 계산 · DVH 패널은 다음 라운드(M2~M4)에 추가됩니다.</div>
+        </div>
+      </div>
+    </section>
+
     <!-- ==================== CASES DB TAB ==================== -->
     <section id="tab-cases" class="tab-content">
       <div class="card">
@@ -340,5 +448,22 @@
   </div>
 
   <script src="dosimetry.js"></script>
+  <script src="report.js"></script>
+  <script src="reference/voxel-core.js"></script>
+  <script type="module">
+    // dwv 0.36.2 ships as ESM with external deps — load via esm.sh which resolves them.
+    import('https://esm.sh/dwv@0.36.2')
+      .then(m => {
+        window.dwv = m;
+        window.__dwvReady = true;
+        window.dispatchEvent(new Event('dwv-ready'));
+      })
+      .catch(err => {
+        window.__dwvError = err;
+        console.error('dwv load failed:', err);
+        window.dispatchEvent(new Event('dwv-error'));
+      });
+  </script>
+  <script src="voxel.js"></script>
 </body>
 </html>
