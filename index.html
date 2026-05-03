@@ -317,6 +317,14 @@
           <input type="file" id="voxelFileInput" multiple webkitdirectory directory style="display:none">
           <button class="save-btn" id="voxelLoadBtn" style="width:auto;padding:8px 16px">파일 선택</button>
           <div style="font-size:10px;color:var(--dim);margin-top:8px">⚠️ 익명화된 DICOM만 사용하세요. 모든 처리는 브라우저 내에서만 이뤄집니다.</div>
+          <div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--border)">
+            <div style="font-size:11px;color:var(--dim);margin-bottom:6px">DICOM이 없으세요? 합성 팬텀 예시 데이터를 불러오세요</div>
+            <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+              <button class="case-action-btn" id="voxelSampleHWBtn" type="button">예시 1: SPECT/CT 융합 (90 slices)</button>
+              <button class="case-action-btn" id="voxelSampleSepBtn" type="button">예시 2: 진단 CT + SPECT 별도 (130 slices)</button>
+            </div>
+            <div id="voxelSampleProgress" style="font-size:10px;color:var(--dim);margin-top:6px;min-height:14px"></div>
+          </div>
         </div>
       </div>
 

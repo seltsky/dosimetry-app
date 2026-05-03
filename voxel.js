@@ -935,6 +935,80 @@ function setText(id, txt) { const el = document.getElementById(id); if (el) el.t
 function setHidden(id, hidden) { const el = document.getElementById(id); if (el) el.style.display = hidden ? 'none' : ''; }
 
 // =====================================================================
+// Sample phantom loader
+// =====================================================================
+const SAMPLE_PHANTOMS = {
+  hardware_fused: {
+    label: 'SPECT/CT 융합',
+    base: 'reference/tests/sample_dicom/hardware_fused',
+    series: [
+      { dir: 'CT', count: 60 },
+      { dir: 'SPECT', count: 30 },
+    ],
+  },
+  separate: {
+    label: '진단 CT + SPECT 별도',
+    base: 'reference/tests/sample_dicom/separate',
+    series: [
+      { dir: 'DiagnosticCT', count: 100 },
+      { dir: 'SPECT', count: 30 },
+    ],
+  },
+};
+
+async function loadSamplePhantom(key) {
+  const cfg = SAMPLE_PHANTOMS[key];
+  if (!cfg) return;
+  const progress = document.getElementById('voxelSampleProgress');
+  const setProgress = (msg) => { if (progress) progress.textContent = msg; };
+
+  const urls = [];
+  for (const s of cfg.series) {
+    for (let i = 0; i < s.count; i++) {
+      const idx = String(i).padStart(3, '0');
+      const path = `${cfg.base}/${s.dir}/slice_${idx}.dcm`;
+      urls.push({ path, name: `${s.dir}_slice_${idx}.dcm` });
+    }
+  }
+
+  setProgress(`${cfg.label} 다운로드 중... 0/${urls.length}`);
+  const files = [];
+  let done = 0;
+  const concurrency = 8;
+  let nextIdx = 0;
+  let aborted = false;
+  async function worker() {
+    while (!aborted) {
+      const i = nextIdx++;
+      if (i >= urls.length) return;
+      const u = urls[i];
+      try {
+        const res = await fetch(u.path);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const buf = await res.arrayBuffer();
+        files.push(new File([buf], u.name, { type: 'application/dicom' }));
+      } catch (err) {
+        aborted = true;
+        setProgress(`다운로드 실패: ${u.path} (${err.message})`);
+        throw err;
+      }
+      done++;
+      if (done % 5 === 0 || done === urls.length) {
+        setProgress(`${cfg.label} 다운로드 중... ${done}/${urls.length}`);
+      }
+    }
+  }
+  try {
+    await Promise.all(Array.from({ length: concurrency }, worker));
+  } catch {
+    return;
+  }
+  setProgress(`${cfg.label} 로드 완료 (${files.length} files) — 분석 시작`);
+  await handleFiles(files);
+  setProgress('');
+}
+
+// =====================================================================
 // UI wiring
 // =====================================================================
 function init() {
@@ -963,6 +1037,9 @@ function init() {
     }
     handleFiles(files);
   });
+
+  document.getElementById('voxelSampleHWBtn')?.addEventListener('click', () => loadSamplePhantom('hardware_fused'));
+  document.getElementById('voxelSampleSepBtn')?.addEventListener('click', () => loadSamplePhantom('separate'));
 
   document.getElementById('voxelResetBtn')?.addEventListener('click', resetViewer);
   document.getElementById('voxelApplyRoles')?.addEventListener('click', applyRoles);
