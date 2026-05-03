@@ -594,6 +594,8 @@ function init() {
       document.querySelectorAll('.tab-content').forEach(tc=>tc.classList.remove('active'));
       tab.classList.add('active');
       document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+      // PACS-style full-bleed for Voxel tab only
+      document.body.classList.toggle('voxel-pacs-mode', tab.dataset.tab === 'voxel');
       // Reset eval button and hide safety on tab switch
       const ps = document.getElementById('partitionSafety');
       const pc = document.getElementById('partitionCases');

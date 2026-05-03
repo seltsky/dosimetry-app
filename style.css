@@ -388,3 +388,203 @@ header h1 { font-size:20px; color:var(--accent); }
 .vp-slider { width: 100%; }
 .vp-info { font-size: 10px; color: var(--dim); text-align: center; }
 .vp-info .mono { font-family: monospace; color: #cdd6e3; }
+
+/* ====== PACS-style Voxel layout ====== */
+/* When Voxel tab is active, expand beyond body's 520px clamp */
+body.voxel-pacs-mode { max-width: none; }
+body.voxel-pacs-mode .tab-content:not(#tab-voxel) { display: none !important; }
+body.voxel-pacs-mode .tabs,
+body.voxel-pacs-mode header { max-width: 520px; margin-left: auto; margin-right: auto; }
+
+#tab-voxel.active { padding: 0; }
+body.voxel-pacs-mode #tab-voxel.active {
+  background: #000;
+  min-height: calc(100vh - 90px);
+}
+
+.pacs-root {
+  background: #04080f;
+  color: #d4dce6;
+  border-top: 1px solid #1a2540;
+}
+
+/* Top: workflow step bar */
+.pacs-stepbar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 8px 14px;
+  background: linear-gradient(180deg,#0d1a2e,#08111f);
+  border-bottom: 1px solid #1a2540;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.pacs-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: #6b7d92;
+  font-weight: 600;
+  position: relative;
+}
+.pacs-step + .pacs-step::before {
+  content: '›';
+  color: #2a3a52;
+  font-size: 14px;
+  margin-right: 4px;
+}
+.pacs-step-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 1.5px solid #2a3a52;
+  background: transparent;
+  flex-shrink: 0;
+}
+.pacs-step.done .pacs-step-dot { background: #2ecc71; border-color: #2ecc71; }
+.pacs-step.active { color: #00d4ff; }
+.pacs-step.active .pacs-step-dot { background: #00d4ff; border-color: #00d4ff; box-shadow: 0 0 6px rgba(0,212,255,0.6); }
+.pacs-step.done { color: #b8c4d3; }
+
+/* Main shell: left toolbox + center viewer */
+.pacs-shell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 0;
+  min-height: calc(100vh - 180px);
+}
+@media (max-width: 720px) {
+  .pacs-shell { grid-template-columns: 1fr; }
+}
+
+/* Left toolbox */
+.pacs-toolbox {
+  background: #0a1322;
+  border-right: 1px solid #1a2540;
+  padding: 0;
+  font-size: 11px;
+  overflow-y: auto;
+  max-height: calc(100vh - 180px);
+}
+@media (max-width: 720px) {
+  .pacs-toolbox { max-height: none; border-right: none; border-bottom: 1px solid #1a2540; }
+}
+.pacs-section { border-bottom: 1px solid #15243d; }
+.pacs-section > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #00b4d8;
+  background: #0d1830;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.pacs-section > summary::-webkit-details-marker { display: none; }
+.pacs-section > summary::after {
+  content: '−';
+  color: #6b7d92;
+  font-size: 14px;
+  font-weight: 400;
+}
+.pacs-section:not([open]) > summary::after { content: '+'; }
+.pacs-section-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.pacs-section-body label { font-size: 10px; color: #8a9ab0; display: block; margin-bottom: 2px; }
+.pacs-section-body select,
+.pacs-section-body input[type=number] {
+  width: 100%; padding: 4px 6px;
+  background: #0a1322; border: 1px solid #1e3050;
+  color: #d4dce6; font-size: 11px; border-radius: 3px;
+}
+.pacs-section-body button {
+  padding: 4px 8px; font-size: 10px;
+  background: #122340; border: 1px solid #1e3050;
+  color: #b8c4d3; border-radius: 3px; cursor: pointer;
+}
+.pacs-section-body button:hover { background: #1a3056; border-color: #00b4d8; color: #00d4ff; }
+.pacs-section-body button.primary {
+  background: #00738a; border-color: #00b4d8; color: #fff;
+}
+.pacs-section-body .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.pacs-section-body .row > * { flex: 0 1 auto; }
+.pacs-section-body input[type=range] { flex: 1; min-width: 80px; }
+
+/* Step list inside Workflow section */
+.pacs-step-list { display: flex; flex-direction: column; gap: 2px; }
+.pacs-step-list-item {
+  padding: 5px 8px; font-size: 11px; color: #8a9ab0;
+  border-left: 2px solid transparent; cursor: default;
+}
+.pacs-step-list-item.active { color: #00d4ff; border-left-color: #00d4ff; background: rgba(0,180,216,0.08); }
+.pacs-step-list-item.done { color: #b8c4d3; }
+
+/* Center viewer */
+.pacs-viewer {
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.pacs-databrowser {
+  display: flex; align-items: center; gap: 12px;
+  padding: 6px 12px;
+  background: #0a1322; border-bottom: 1px solid #1a2540;
+  font-size: 11px; color: #8a9ab0;
+  flex-wrap: wrap;
+}
+.pacs-databrowser strong { color: #00d4ff; font-weight: 700; }
+.pacs-databrowser .reset { margin-left: auto; }
+
+.pacs-viewport-area { flex: 1; padding: 8px; overflow-y: auto; }
+
+/* Repurpose voxel-grid inside pacs */
+.pacs-viewport-area .voxel-grid { gap: 4px; }
+.pacs-viewport-area .voxel-vp {
+  background: #000; border: 1px solid #1a2540; padding: 0;
+  position: relative;
+}
+.pacs-viewport-area .voxel-vp-label {
+  position: absolute; top: 4px; left: 8px; z-index: 5;
+  background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 2px;
+  font-size: 9px;
+}
+
+/* 4-corner overlays on viewport */
+.vp-overlay {
+  position: absolute;
+  z-index: 4;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 9px;
+  line-height: 1.35;
+  color: #d4dce6;
+  pointer-events: none;
+  text-shadow: 0 0 3px #000, 0 1px 2px #000;
+  white-space: pre;
+  max-width: 45%;
+}
+.vp-overlay.vp-tl { top: 18px; left: 8px; }
+.vp-overlay.vp-tr { top: 18px; right: 8px; text-align: right; }
+.vp-overlay.vp-bl { bottom: 28px; left: 8px; }
+.vp-overlay.vp-br { bottom: 28px; right: 8px; text-align: right; }
+.vp-overlay .accent { color: #00d4ff; }
+.vp-overlay .dim { color: #8a9ab0; }
+
+/* Slider in PACS mode */
+.pacs-viewport-area .vp-slider {
+  height: 14px;
+  margin-top: 2px;
+  accent-color: #00b4d8;
+}
+.pacs-viewport-area .vp-info { padding: 2px 4px 4px; }
+
+/* PACS reset/exit button */
+.pacs-exit-btn {
+  padding: 3px 8px; font-size: 10px;
+  background: transparent; border: 1px solid #2a3a52;
+  color: #8a9ab0; border-radius: 3px; cursor: pointer;
+}
+.pacs-exit-btn:hover { border-color: #e74c3c; color: #e74c3c; }

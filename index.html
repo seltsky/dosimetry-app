@@ -303,140 +303,198 @@
 
     <!-- ==================== VOXEL TAB (SPEC-DOSI-VOXEL-001) ==================== -->
     <section id="tab-voxel" class="tab-content">
-      <div class="card">
-        <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:6px">DICOM 기반 Voxel Dosimetry (검증·연구용)</div>
-        <p style="font-size:11px;color:var(--dim);margin:0 0 8px">SPECT/CT 또는 PET/CT를 로드하고 ROI를 그려 Method 1(ROI partition) + Method 2(voxel-based) 결과를 동시 산출합니다. 임상 결정 단독 사용 금지.</p>
-      </div>
+      <div class="pacs-root">
 
-      <!-- Onboarding / drop zone -->
-      <div id="voxelOnboarding" class="card">
-        <div id="voxelDropZone" class="voxel-drop">
-          <div style="font-size:26px;line-height:1.2;margin-bottom:6px">📁</div>
-          <div style="font-weight:700;font-size:13px;margin-bottom:4px">DICOM 시리즈 로드</div>
-          <div style="font-size:11px;color:var(--dim);margin-bottom:10px">SPECT/CT, PET/CT, baseline CT 폴더 또는 파일을 드롭하세요</div>
-          <input type="file" id="voxelFileInput" multiple webkitdirectory directory style="display:none">
-          <button class="save-btn" id="voxelLoadBtn" style="width:auto;padding:8px 16px">파일 선택</button>
-          <div style="font-size:10px;color:var(--dim);margin-top:8px">⚠️ 익명화된 DICOM만 사용하세요. 모든 처리는 브라우저 내에서만 이뤄집니다.</div>
-          <div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--border)">
-            <div style="font-size:11px;color:var(--dim);margin-bottom:6px">DICOM이 없으세요? 합성 팬텀 예시 데이터를 불러오세요</div>
-            <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
-              <button class="case-action-btn" id="voxelSampleHWBtn" type="button">예시 1: SPECT/CT 융합 (90 slices)</button>
-              <button class="case-action-btn" id="voxelSampleSepBtn" type="button">예시 2: 진단 CT + SPECT 별도 (130 slices)</button>
-            </div>
-            <div id="voxelSampleProgress" style="font-size:10px;color:var(--dim);margin-top:6px;min-height:14px"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Active viewer (hidden until load) -->
-      <div id="voxelViewerWrap" style="display:none">
-        <div class="card">
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px">
-            <strong style="color:var(--accent)">로드된 시리즈</strong>
-            <span id="voxelSeriesInfo" style="color:var(--dim)">-</span>
-            <button class="case-action-btn" id="voxelResetBtn" style="margin-left:auto">새로 로드</button>
-          </div>
-          <div id="voxelPhiWarn" class="report-phi-warn" style="display:none;margin-top:6px"></div>
+        <!-- Workflow step bar -->
+        <div class="pacs-stepbar" id="voxelStepBar">
+          <div class="pacs-step active" data-step="load"><span class="pacs-step-dot"></span><span>Load Data</span></div>
+          <div class="pacs-step" data-step="roles"><span class="pacs-step-dot"></span><span>Series Roles</span></div>
+          <div class="pacs-step" data-step="reg"><span class="pacs-step-dot"></span><span>Registration QC</span></div>
+          <div class="pacs-step" data-step="seg"><span class="pacs-step-dot"></span><span>Segmentation</span></div>
+          <div class="pacs-step" data-step="dose"><span class="pacs-step-dot"></span><span>Dosimetry</span></div>
+          <div class="pacs-step" data-step="report"><span class="pacs-step-dot"></span><span>Report</span></div>
         </div>
 
-        <!-- Series role selector + overlay controls -->
-        <div class="card">
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;margin-bottom:6px">
-            <strong>Diagnostic base</strong>
-            <select id="voxelBaseSelect" class="mini-select"></select>
-            <strong>Functional overlay</strong>
-            <select id="voxelOvlSelect" class="mini-select"></select>
-            <button class="case-action-btn" id="voxelApplyRoles">적용</button>
+        <!-- Onboarding / drop zone (visible until load) -->
+        <div id="voxelOnboarding" style="padding:16px">
+          <div style="font-size:11px;color:#8a9ab0;margin-bottom:10px;text-align:center">
+            DICOM 기반 Voxel Dosimetry — SPECT/CT 또는 PET/CT를 로드하고 ROI를 그려 Method 1(ROI partition) + Method 2(voxel-based) 결과 동시 산출. 임상 단독 사용 금지.
           </div>
-          <div id="voxelFusedHint" style="font-size:11px;color:var(--dim);display:none"></div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;margin-top:8px">
-            <strong>Overlay</strong>
-            <select id="voxelColormap" class="mini-select">
-              <option value="hot">hot</option>
-              <option value="jet">jet</option>
-              <option value="viridis">viridis</option>
-            </select>
-            <span style="color:var(--dim)">opacity</span>
-            <input type="range" id="voxelOpacity" min="0" max="100" value="50" style="flex:1;min-width:120px">
-            <span id="voxelOpacityVal">50%</span>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;margin-top:8px">
-            <strong>CT window</strong>
-            <span style="color:var(--dim)">center</span>
-            <input type="number" id="voxelWLcenter" value="40" step="10" style="width:70px">
-            <span style="color:var(--dim)">width</span>
-            <input type="number" id="voxelWLwidth" value="400" step="20" style="width:80px">
-            <button class="case-action-btn" data-preset="abdomen">복부 W400/40</button>
-            <button class="case-action-btn" data-preset="liver">간 W150/60</button>
-            <button class="case-action-btn" data-preset="lung">폐 W1500/-600</button>
-          </div>
-        </div>
-
-        <!-- Custom multi-viewport (M1.4): axial / sagittal / coronal with cross-hair sync -->
-        <div class="card">
-          <div class="voxel-grid">
-            <div class="voxel-vp" data-axis="axial">
-              <div class="voxel-vp-label">Axial (k)</div>
-              <div class="voxel-vp-canvases">
-                <canvas class="vp-base" id="vpAxialBase" width="512" height="512"></canvas>
-                <canvas class="vp-ovl" id="vpAxialOvl" width="512" height="512"></canvas>
-                <canvas class="vp-cross" id="vpAxialCross" width="512" height="512"></canvas>
+          <div id="voxelDropZone" class="voxel-drop">
+            <div style="font-size:26px;line-height:1.2;margin-bottom:6px">📁</div>
+            <div style="font-weight:700;font-size:13px;margin-bottom:4px">DICOM 시리즈 로드</div>
+            <div style="font-size:11px;color:var(--dim);margin-bottom:10px">SPECT/CT, PET/CT, baseline CT 폴더 또는 파일을 드롭하세요</div>
+            <input type="file" id="voxelFileInput" multiple webkitdirectory directory style="display:none">
+            <button class="save-btn" id="voxelLoadBtn" style="width:auto;padding:8px 16px">파일 선택</button>
+            <div style="font-size:10px;color:var(--dim);margin-top:8px">⚠️ 익명화된 DICOM만 사용하세요. 모든 처리는 브라우저 내에서만 이뤄집니다.</div>
+            <div style="margin-top:14px;padding-top:10px;border-top:1px dashed var(--border)">
+              <div style="font-size:11px;color:var(--dim);margin-bottom:6px">DICOM이 없으세요? 합성 팬텀 예시 데이터를 불러오세요</div>
+              <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap">
+                <button class="case-action-btn" id="voxelSampleHWBtn" type="button">예시 1: SPECT/CT 융합 (90 slices)</button>
+                <button class="case-action-btn" id="voxelSampleSepBtn" type="button">예시 2: 진단 CT + SPECT 별도 (130 slices)</button>
               </div>
-              <input type="range" class="vp-slider" id="sliceK" min="0" max="0" value="0">
-              <div class="vp-info"><span id="kVal" class="mono">0/0</span></div>
+              <div id="voxelSampleProgress" style="font-size:10px;color:var(--dim);margin-top:6px;min-height:14px"></div>
             </div>
-            <div class="voxel-vp" data-axis="sagittal">
-              <div class="voxel-vp-label">Sagittal (i)</div>
-              <div class="voxel-vp-canvases">
-                <canvas class="vp-base" id="vpSagBase" width="512" height="512"></canvas>
-                <canvas class="vp-ovl" id="vpSagOvl" width="512" height="512"></canvas>
-                <canvas class="vp-cross" id="vpSagCross" width="512" height="512"></canvas>
-              </div>
-              <input type="range" class="vp-slider" id="sliceI" min="0" max="0" value="0">
-              <div class="vp-info"><span id="iVal" class="mono">0/0</span></div>
-            </div>
-            <div class="voxel-vp" data-axis="coronal">
-              <div class="voxel-vp-label">Coronal (j)</div>
-              <div class="voxel-vp-canvases">
-                <canvas class="vp-base" id="vpCorBase" width="512" height="512"></canvas>
-                <canvas class="vp-ovl" id="vpCorOvl" width="512" height="512"></canvas>
-                <canvas class="vp-cross" id="vpCorCross" width="512" height="512"></canvas>
-              </div>
-              <input type="range" class="vp-slider" id="sliceJ" min="0" max="0" value="0">
-              <div class="vp-info"><span id="jVal" class="mono">0/0</span></div>
-            </div>
-          </div>
-          <div style="font-size:10px;color:var(--dim);margin-top:6px">
-            클릭 → cross-hair 동기화. 휠 → 해당 축 슬라이스 스크롤. landmark 모드 ON시 클릭 = landmark 추가.
           </div>
         </div>
 
-        <!-- Landmark Registration Panel (M1.6) -->
-        <div class="card" id="voxelLandmarkCard">
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;margin-bottom:6px">
-            <strong style="color:var(--accent)">Manual Landmark Registration</strong>
-            <span style="color:var(--dim);font-size:10px">3~10 점 클릭 (해부학 지점 권장)</span>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;margin-bottom:6px">
-            <button class="case-action-btn" id="voxelLandmarkMode">Landmark mode: OFF</button>
-            <span style="color:var(--dim)">Click target:</span>
-            <button class="case-action-btn" id="voxelLandmarkBase" data-target="base">Base (CT/MR)</button>
-            <button class="case-action-btn" id="voxelLandmarkOvl" data-target="ovl">Overlay (SPECT)</button>
-            <button class="case-action-btn" id="voxelLandmarkClear">Clear all</button>
-          </div>
-          <div id="voxelLandmarkList" style="font-size:11px;font-family:monospace;background:#0c1220;padding:6px;border-radius:4px;max-height:140px;overflow-y:auto"></div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;margin-top:8px">
-            <select id="voxelRegMode" class="mini-select">
-              <option value="rigid">rigid (6 DoF)</option>
-              <option value="similarity">similarity (7 DoF, +scale)</option>
-            </select>
-            <button class="save-btn" id="voxelComputeReg" style="width:auto;padding:6px 14px">Compute Registration</button>
-          </div>
-          <div id="voxelRegStatus" style="font-size:11px;margin-top:8px"></div>
-        </div>
+        <!-- Active PACS viewer (hidden until load) -->
+        <div id="voxelViewerWrap" class="pacs-shell" style="display:none">
 
-        <div class="card" id="voxelPlaceholder">
-          <div style="font-size:11px;color:var(--dim)">ROI 도구 · Method 1·2 계산 · DVH 패널은 다음 라운드(M2~M4)에 추가됩니다.</div>
+          <!-- Left toolbox -->
+          <aside class="pacs-toolbox">
+            <details class="pacs-section" open>
+              <summary>Workflow</summary>
+              <div class="pacs-section-body">
+                <div class="pacs-step-list" id="voxelStepList">
+                  <div class="pacs-step-list-item done" data-step="load">✓ Load Data</div>
+                  <div class="pacs-step-list-item active" data-step="roles">▸ Series Roles</div>
+                  <div class="pacs-step-list-item" data-step="reg">Registration QC</div>
+                  <div class="pacs-step-list-item" data-step="seg">Segmentation</div>
+                  <div class="pacs-step-list-item" data-step="dose">Dosimetry</div>
+                  <div class="pacs-step-list-item" data-step="report">Report</div>
+                </div>
+              </div>
+            </details>
+
+            <details class="pacs-section" open>
+              <summary>Series Roles</summary>
+              <div class="pacs-section-body">
+                <label>Diagnostic base</label>
+                <select id="voxelBaseSelect" class="mini-select"></select>
+                <label>Functional overlay</label>
+                <select id="voxelOvlSelect" class="mini-select"></select>
+                <button class="primary" id="voxelApplyRoles">적용</button>
+                <div id="voxelFusedHint" style="font-size:10px;color:var(--dim);display:none"></div>
+              </div>
+            </details>
+
+            <details class="pacs-section" open>
+              <summary>Layers / Overlay</summary>
+              <div class="pacs-section-body">
+                <label>Colormap</label>
+                <select id="voxelColormap" class="mini-select">
+                  <option value="hot">hot</option>
+                  <option value="jet">jet</option>
+                  <option value="viridis">viridis</option>
+                </select>
+                <label>Opacity <span id="voxelOpacityVal" style="color:#00d4ff">50%</span></label>
+                <input type="range" id="voxelOpacity" min="0" max="100" value="50">
+              </div>
+            </details>
+
+            <details class="pacs-section" open>
+              <summary>CT Window</summary>
+              <div class="pacs-section-body">
+                <div class="row">
+                  <div style="flex:1">
+                    <label>Center</label>
+                    <input type="number" id="voxelWLcenter" value="40" step="10">
+                  </div>
+                  <div style="flex:1">
+                    <label>Width</label>
+                    <input type="number" id="voxelWLwidth" value="400" step="20">
+                  </div>
+                </div>
+                <div class="row">
+                  <button data-preset="abdomen">복부 W400/40</button>
+                  <button data-preset="liver">간 W150/60</button>
+                  <button data-preset="lung">폐 W1500/-600</button>
+                </div>
+              </div>
+            </details>
+
+            <details class="pacs-section">
+              <summary>Landmark Registration</summary>
+              <div class="pacs-section-body" id="voxelLandmarkCard">
+                <div style="font-size:10px;color:var(--dim)">3~10 해부학 지점 클릭하여 수동 정합</div>
+                <div class="row">
+                  <button id="voxelLandmarkMode">Mode: OFF</button>
+                </div>
+                <label>Click target</label>
+                <div class="row">
+                  <button id="voxelLandmarkBase" data-target="base">Base (CT)</button>
+                  <button id="voxelLandmarkOvl" data-target="ovl">Overlay (SPECT)</button>
+                  <button id="voxelLandmarkClear">Clear</button>
+                </div>
+                <label>Mode</label>
+                <select id="voxelRegMode" class="mini-select">
+                  <option value="rigid">rigid (6 DoF)</option>
+                  <option value="similarity">similarity (7 DoF, +scale)</option>
+                </select>
+                <button class="primary" id="voxelComputeReg">Compute Registration</button>
+                <div id="voxelLandmarkList" style="font-size:10px;font-family:monospace;background:#04080f;padding:6px;border-radius:3px;max-height:120px;overflow-y:auto;border:1px solid #1a2540"></div>
+                <div id="voxelRegStatus" style="font-size:10px"></div>
+              </div>
+            </details>
+
+            <details class="pacs-section">
+              <summary>Structures</summary>
+              <div class="pacs-section-body">
+                <div style="font-size:10px;color:var(--dim)">ROI 도구 · Method 1·2 · DVH 패널은 M2~M4에서 추가됩니다.</div>
+              </div>
+            </details>
+          </aside>
+
+          <!-- Center viewer -->
+          <main class="pacs-viewer">
+            <div class="pacs-databrowser">
+              <strong>SERIES</strong>
+              <span id="voxelSeriesInfo">-</span>
+              <button class="pacs-exit-btn reset" id="voxelResetBtn">새로 로드</button>
+            </div>
+            <div id="voxelPhiWarn" class="report-phi-warn" style="display:none;margin:6px 12px"></div>
+
+            <div class="pacs-viewport-area">
+              <div class="voxel-grid">
+                <div class="voxel-vp" data-axis="axial">
+                  <div class="voxel-vp-label">AXIAL</div>
+                  <div class="vp-overlay vp-tl" id="ovTLAxial"></div>
+                  <div class="vp-overlay vp-tr" id="ovTRAxial"></div>
+                  <div class="vp-overlay vp-bl" id="ovBLAxial"></div>
+                  <div class="vp-overlay vp-br" id="ovBRAxial"></div>
+                  <div class="voxel-vp-canvases">
+                    <canvas class="vp-base" id="vpAxialBase" width="512" height="512"></canvas>
+                    <canvas class="vp-ovl" id="vpAxialOvl" width="512" height="512"></canvas>
+                    <canvas class="vp-cross" id="vpAxialCross" width="512" height="512"></canvas>
+                  </div>
+                  <input type="range" class="vp-slider" id="sliceK" min="0" max="0" value="0">
+                  <div class="vp-info"><span id="kVal" class="mono">0/0</span></div>
+                </div>
+                <div class="voxel-vp" data-axis="sagittal">
+                  <div class="voxel-vp-label">SAGITTAL</div>
+                  <div class="vp-overlay vp-tl" id="ovTLSag"></div>
+                  <div class="vp-overlay vp-tr" id="ovTRSag"></div>
+                  <div class="vp-overlay vp-bl" id="ovBLSag"></div>
+                  <div class="vp-overlay vp-br" id="ovBRSag"></div>
+                  <div class="voxel-vp-canvases">
+                    <canvas class="vp-base" id="vpSagBase" width="512" height="512"></canvas>
+                    <canvas class="vp-ovl" id="vpSagOvl" width="512" height="512"></canvas>
+                    <canvas class="vp-cross" id="vpSagCross" width="512" height="512"></canvas>
+                  </div>
+                  <input type="range" class="vp-slider" id="sliceI" min="0" max="0" value="0">
+                  <div class="vp-info"><span id="iVal" class="mono">0/0</span></div>
+                </div>
+                <div class="voxel-vp" data-axis="coronal">
+                  <div class="voxel-vp-label">CORONAL</div>
+                  <div class="vp-overlay vp-tl" id="ovTLCor"></div>
+                  <div class="vp-overlay vp-tr" id="ovTRCor"></div>
+                  <div class="vp-overlay vp-bl" id="ovBLCor"></div>
+                  <div class="vp-overlay vp-br" id="ovBRCor"></div>
+                  <div class="voxel-vp-canvases">
+                    <canvas class="vp-base" id="vpCorBase" width="512" height="512"></canvas>
+                    <canvas class="vp-ovl" id="vpCorOvl" width="512" height="512"></canvas>
+                    <canvas class="vp-cross" id="vpCorCross" width="512" height="512"></canvas>
+                  </div>
+                  <input type="range" class="vp-slider" id="sliceJ" min="0" max="0" value="0">
+                  <div class="vp-info"><span id="jVal" class="mono">0/0</span></div>
+                </div>
+              </div>
+              <div style="font-size:10px;color:#6b7d92;margin-top:8px;padding:0 4px">
+                클릭 = cross-hair 동기화 · 휠 = 슬라이스 스크롤 · landmark 모드시 클릭 = landmark 추가
+              </div>
+            </div>
+          </main>
         </div>
       </div>
     </section>

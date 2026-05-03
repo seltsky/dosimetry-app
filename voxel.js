@@ -535,6 +535,7 @@ async function handleFiles(fileList) {
   setText('voxelSeriesInfo', `분석 중... (${files.length}개)`);
   setHidden('voxelOnboarding', true);
   setHidden('voxelViewerWrap', false);
+  setStep('roles');
 
   // Parse metadata
   const metaList = [];
@@ -656,6 +657,8 @@ async function applyRoles() {
   setText('voxelSeriesInfo',
     `Base: ${state.baseVolume?.modality} ${state.baseVolume?.dims.join('×')}` +
     (state.ovlVolume ? ` · Overlay: ${state.ovlVolume.modality} ${state.ovlVolume.dims.join('×')}` : ''));
+  // Step bar: roles done, next step is registration QC (if multi-series) or segmentation
+  setStep(state.ovlVolume ? 'reg' : 'seg');
   redraw();
 }
 
@@ -723,6 +726,62 @@ function redraw() {
   if (sI) sI.value = cursor.i;
   if (sJ) sJ.value = cursor.j;
   if (sK) sK.value = cursor.k;
+
+  updateViewportOverlays(vol, cursor, overlayVol);
+}
+
+// Populate 4-corner PACS-style overlays on each viewport
+function updateViewportOverlays(vol, cursor, overlayVol) {
+  const dims = vol.dims;
+  const baseRole = state.viewMode === 'base' ? 'BASE' : (state.viewMode === 'ovl' ? 'OVERLAY' : 'FUSION');
+  const wl = `W ${state.windowWidth} / L ${state.windowCenter}`;
+  const patientLine = state.patientInfo
+    ? `${state.patientInfo.name || 'Anonymous'}\n${state.patientInfo.id || ''}`
+    : 'Anonymous Phantom';
+
+  const sampleAt = (v, i, j, k) => {
+    if (!v || i<0||j<0||k<0||i>=v.dims[0]||j>=v.dims[1]||k>=v.dims[2]) return null;
+    const idx = k*v.dims[0]*v.dims[1] + j*v.dims[0] + i;
+    return v.data[idx];
+  };
+  const baseVal = sampleAt(state.baseVolume, cursor.i, cursor.j, cursor.k);
+  const ovlVal = state.resampledOvl ? sampleAt(state.resampledOvl, cursor.i, cursor.j, cursor.k) : null;
+  const valStr = (baseVal != null ? `CT ${baseVal.toFixed(0)} HU` : '—')
+                 + (ovlVal != null ? `\nSPECT ${ovlVal.toFixed(0)}` : '');
+
+  const ovlByAxis = [
+    { axis: 'axial', tl:'ovTLAxial', tr:'ovTRAxial', bl:'ovBLAxial', br:'ovBRAxial',
+      slice: cursor.k+1, total: dims[2], view: 'AXIAL' },
+    { axis: 'sagittal', tl:'ovTLSag', tr:'ovTRSag', bl:'ovBLSag', br:'ovBRSag',
+      slice: cursor.i+1, total: dims[0], view: 'SAGITTAL' },
+    { axis: 'coronal', tl:'ovTLCor', tr:'ovTRCor', bl:'ovBLCor', br:'ovBRCor',
+      slice: cursor.j+1, total: dims[1], view: 'CORONAL' },
+  ];
+  const setHTML = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  for (const o of ovlByAxis) {
+    setHTML(o.tl, patientLine);
+    setHTML(o.tr, `<span class="dim">${wl}</span>`);
+    setHTML(o.bl, `<span class="accent">${baseRole}</span>\n<span class="dim">${valStr.split('\n')[0]}</span>${valStr.split('\n')[1] ? '\n<span class="dim">'+valStr.split('\n')[1]+'</span>' : ''}`);
+    setHTML(o.br, `${o.view}\nSlice ${o.slice}/${o.total}\n<span class="dim">${overlayVol ? 'fusion' : 'base only'}</span>`);
+  }
+}
+
+// Step bar progression
+function setStep(stepName) {
+  const order = ['load', 'roles', 'reg', 'seg', 'dose', 'report'];
+  const idx = order.indexOf(stepName);
+  if (idx < 0) return;
+  document.querySelectorAll('#voxelStepBar .pacs-step').forEach((el, i) => {
+    el.classList.remove('active', 'done');
+    if (i < idx) el.classList.add('done');
+    else if (i === idx) el.classList.add('active');
+  });
+  document.querySelectorAll('#voxelStepList .pacs-step-list-item').forEach((el, i) => {
+    el.classList.remove('active', 'done');
+    el.textContent = el.textContent.replace(/^[✓▸ ]+/, '');
+    if (i < idx) { el.classList.add('done'); el.textContent = '✓ ' + el.textContent; }
+    else if (i === idx) { el.classList.add('active'); el.textContent = '▸ ' + el.textContent; }
+  });
 }
 
 function clampSlice(idx, axis, vol) {
@@ -903,6 +962,7 @@ function computeRegistration() {
       (mode === 'similarity' ? ` · scale = ${reg.scale.toFixed(4)}` : '') +
       ` · overlay 재샘플링 완료`;
   }
+  setStep('seg');
   redraw();
 }
 
@@ -926,6 +986,7 @@ function resetViewer() {
   setText('voxelSeriesInfo', '-');
   showPhiWarn([]);
   refreshLandmarkList();
+  setStep('load');
 }
 
 // =====================================================================
@@ -1014,6 +1075,12 @@ async function loadSamplePhantom(key) {
 function init() {
   const dropZone = document.getElementById('voxelDropZone');
   if (!dropZone) return;
+
+  // Apply PACS body class if Voxel tab is active on load
+  const voxelTab = document.getElementById('tab-voxel');
+  if (voxelTab && voxelTab.classList.contains('active')) {
+    document.body.classList.add('voxel-pacs-mode');
+  }
   const fileInput = document.getElementById('voxelFileInput');
   document.getElementById('voxelLoadBtn')?.addEventListener('click', () => fileInput?.click());
   fileInput?.addEventListener('change', () => handleFiles(fileInput.files));
