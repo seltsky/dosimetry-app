@@ -582,6 +582,11 @@ async function handleFiles(fileList) {
 
   setText('voxelSeriesInfo', `${seriesByUid.size}개 시리즈 (${files.length}장)`);
   state.loaded = true;
+
+  // Auto-apply roles when we detected sensible defaults — user can reassign later
+  if (firstCT) {
+    await applyRoles();
+  }
 }
 
 async function applyRoles() {
